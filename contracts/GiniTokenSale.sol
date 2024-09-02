@@ -2,11 +2,8 @@
 pragma solidity 0.8.26;
 
 import "@openzeppelin/contracts/access/AccessControl.sol";
-import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
-import "@openzeppelin/contracts/access/AccessControl.sol";
+import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 import "@openzeppelin/contracts/utils/Address.sol";
-
-import {AggregatorV3Interface} from "@chainlink/contracts/src/v0.8/shared/interfaces/AggregatorV3Interface.sol";
 
 contract GiniTokenSale is AccessControl {
     // _______________ Structs _______________
@@ -22,15 +19,17 @@ contract GiniTokenSale is AccessControl {
 
     // _______________ Storage _______________
 
-    uint256 public tokenPrice;
+    uint256 public giniPrice;
 
     uint256 public maxCapPerUser;
 
     SalePhase public salePhase;
 
-    IERC20 public purchaseToken;
+    ERC20 public purchaseToken;
 
-    IERC20 public gini;
+    uint256 public purchaseTokenDecimals;
+
+    ERC20 public gini;
 
     uint256 totalSupply;
 
@@ -71,6 +70,8 @@ contract GiniTokenSale is AccessControl {
     event Purchase(address user, uint256 amount);
 
     event SetTotalSupply(uint256 value);
+
+    event SetPurchaseToken(address token);
 
     receive() external payable {}
 
@@ -122,8 +123,8 @@ contract GiniTokenSale is AccessControl {
             value = address(this).balance;
             Address.sendValue(payable(_recepient), value);
         } else {
-            value = IERC20(_token).balanceOf(address(this));
-            IERC20(_token).transfer(_recepient, value);
+            value = ERC20(_token).balanceOf(address(this));
+            ERC20(_token).transfer(_recepient, value);
         }
 
         emit Withdraw(_token, _recepient, value);
@@ -133,7 +134,7 @@ contract GiniTokenSale is AccessControl {
         if (_token == address(0)) revert ZeroAddress();
         if (salePhase.start < block.timestamp || salePhase.end > block.timestamp) revert NotAllowedDuringSale();
 
-        gini = IERC20(_token);
+        gini = ERC20(_token);
 
         emit SetGiniToken(_token);
     }
@@ -147,8 +148,16 @@ contract GiniTokenSale is AccessControl {
         emit SetTotalSupply(_value);
     }
 
+    function setMaxCapPerUser(uint256 _value) external onlyRole(DEFAULT_ADMIN_ROLE) {
+        _setMaxCapPerUser(_value);
+    }
+
     function getReceivedAmount(uint256 _purchaseAmount) external view returns (uint256) {
         return _calcAmountToReceive(_purchaseAmount);
+    }
+
+    function getSaleTime() external view returns (uint256, uint256) {
+        return (salePhase.start, salePhase.end);
     }
 
     function _setMaxCapPerUser(uint256 _value) internal {
@@ -171,7 +180,7 @@ contract GiniTokenSale is AccessControl {
     function _setGiniPrice(uint256 _price) internal {
         if (_price == 0) revert InsufficientValue();
 
-        tokenPrice = _price;
+        giniPrice = _price;
 
         emit SetGiniPrice(_price);
     }
@@ -179,8 +188,17 @@ contract GiniTokenSale is AccessControl {
     function _setPurchaseToken(address _token) internal {
         if (_token == address(0)) revert ZeroAddress();
 
-        purchaseToken = IERC20(_token);
+        purchaseToken = ERC20(_token);
+        purchaseTokenDecimals = ERC20(_token).decimals();
+
+        emit SetPurchaseToken(_token);
     }
 
-    function _calcAmountToReceive(uint256 _value) internal pure returns (uint256) {}
+    function _calcAmountToReceive(uint256 _value) internal view returns (uint256) {
+        if (purchaseTokenDecimals == 18) {
+            return giniPrice * _value;
+        } else {
+            return giniPrice * (_value ** (18 - purchaseTokenDecimals));
+        }
+    }
 }
