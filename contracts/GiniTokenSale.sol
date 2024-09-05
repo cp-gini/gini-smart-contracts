@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: SEE LICENSE IN LICENSE
+// SPDX-License-Identifier: UNLICENSED
 pragma solidity 0.8.26;
 
 import "@openzeppelin/contracts/access/AccessControl.sol";
@@ -38,7 +38,7 @@ contract GiniTokenSale is AccessControl {
     uint256 public giniPrice;
 
     /// @notice Stores the maximum amount of Gini tokens that can be purchased per user.
-    uint256 public maxCapPerUser;
+    // uint256 public maxCapPerUser;
 
     /// @notice Stores the amount of token decimals of the purchase token.
     uint256 public purchaseTokenDecimals;
@@ -78,11 +78,13 @@ contract GiniTokenSale is AccessControl {
 
     error TotalSupplyReached();
 
+    error OnlyUser();
+
     // _______________ Events _______________
 
     event SalePhaseSet(uint256 start, uint256 end);
 
-    event SetMaxCapPerUser(uint256 value);
+    // event SetMaxCapPerUser(uint256 value);
 
     event SetGiniPrice(uint256 value);
 
@@ -96,6 +98,13 @@ contract GiniTokenSale is AccessControl {
 
     event SetPurchaseToken(address token);
 
+    // _______________ Modifiers _______________
+
+    // modifier callerIsUser() {
+    //     if (tx.origin != _msgSender()) revert OnlyUser();
+    //     _;
+    // }
+
     // _______________ Constructor _______________
 
     /**
@@ -105,7 +114,6 @@ contract GiniTokenSale is AccessControl {
      * @param _saleStart - the start timestamp of the sale
      * @param _saleEnd - the end timestamp of the sale
      * @param _purchaseToken - the address of the purchase token
-     * @param _maxCapPerUser - the maximum amount of Gini tokens that can be purchased per user
      * @param _totalSupply - the total remaining amount of Gini tokens that can be purchased
      */
     constructor(
@@ -113,13 +121,11 @@ contract GiniTokenSale is AccessControl {
         uint256 _saleStart,
         uint256 _saleEnd,
         address _purchaseToken,
-        uint256 _maxCapPerUser,
         uint256 _totalSupply
     ) {
         _setGiniPrice(_giniPrice);
         _setSalePhase(_saleStart, _saleEnd);
         _setPurchaseToken(_purchaseToken);
-        _setMaxCapPerUser(_maxCapPerUser);
         _setTotalSupply(_totalSupply);
 
         _grantRole(DEFAULT_ADMIN_ROLE, msg.sender);
@@ -138,11 +144,7 @@ contract GiniTokenSale is AccessControl {
         if (salePhase.start > block.timestamp || salePhase.end < block.timestamp) revert OnlyWhileSalePhase();
 
         address buyer = _msgSender();
-        uint256 userPurchase = purchaseAmount[buyer];
         uint256 amountToReceive = _calcAmountToReceive(_value);
-
-        if (userPurchase + amountToReceive > maxCapPerUser)
-            revert PurchaseLimitReached(buyer, maxCapPerUser, userPurchase + amountToReceive);
 
         if (totalSupply < amountToReceive) revert TotalSupplyReached();
 
@@ -156,7 +158,7 @@ contract GiniTokenSale is AccessControl {
     }
 
     /**
-     * @notice Allows admin to withdraw the remaining amount of Gini tokens.
+     * @notice Allows admin to withdraw the remaining ERC20 or native token.
      *
      * @param _token - the address of the token
      *               if token is zero address, it will withdraw native token
@@ -198,15 +200,6 @@ contract GiniTokenSale is AccessControl {
     }
 
     /**
-     * @notice Allows admin to set the maximum amount of Gini tokens that can be purchased per user.
-     *
-     * @param _value - the maximum amount of Gini tokens that can be purchased per user
-     */
-    function setMaxCapPerUser(uint256 _value) external onlyRole(DEFAULT_ADMIN_ROLE) {
-        _setMaxCapPerUser(_value);
-    }
-
-    /**
      *
      * @param _purchaseAmount - calculate the amount to receive of Gini tokens
      */
@@ -223,14 +216,6 @@ contract GiniTokenSale is AccessControl {
     }
 
     // _______________ Internal Functions _______________
-
-    function _setMaxCapPerUser(uint256 _value) internal {
-        if (_value == 0) revert InsufficientValue();
-
-        maxCapPerUser = _value;
-
-        emit SetMaxCapPerUser(_value);
-    }
 
     function _setTotalSupply(uint256 _value) internal {
         if (_value == 0) revert InsufficientValue();
