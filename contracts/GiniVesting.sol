@@ -45,7 +45,7 @@ contract GiniVesting is AccessControl, ReentrancyGuard {
 
     // _______________ Storage _______________
 
-    uint256 public constant CLAIM_INTERVAL = 30 days;
+    uint256 public CLAIM_INTERVAL = 30 days;
 
     // _______________ Storage _______________
 
@@ -64,17 +64,18 @@ contract GiniVesting is AccessControl, ReentrancyGuard {
     /// @notice Vesting ID => Beneficiary => Beneficiary info.
     mapping(uint256 => mapping(address => Beneficiary)) public beneficiaries;
 
+    /// @notice The vesting token.
     IERC20 public gini;
 
+    /// @notice The total supply of the vesting token.
     uint256 public totalSupply;
-
-    uint256 public remainingSupply;
 
     /// @notice The total amount of claims from all users and vestings.
     uint256 public totalClaimsForAll;
 
     // _______________ Errors _______________
 
+    /// @dev Revert if zero address is passed.
     error ZeroAddress();
 
     /// @dev Revert if arrays lengths are not equal.
@@ -95,12 +96,16 @@ contract GiniVesting is AccessControl, ReentrancyGuard {
     /// @dev Revert if vesting is already initialized.
     error AlreadyInitialized();
 
+    /// @dev Revert if total supply is zero.
     error CannotBeZero();
 
+    /// @dev Revert if total supply is reached.
     error TotalSupplyReached();
 
+    /// @dev Revert if vesting token rescue failed.
     error VestingTokenRescue(address token);
 
+    /// @dev Revert if nothing to claim.
     error NothingToClaim();
 
     /// @dev Revert if vesting is not started yet.
@@ -134,6 +139,9 @@ contract GiniVesting is AccessControl, ReentrancyGuard {
         uint256 endTimestamp
     );
 
+    /**
+     * @dev Emitted when the token for the vesting is set.
+     */
     event SetGiniToken(address token);
 
     /**
@@ -148,9 +156,12 @@ contract GiniVesting is AccessControl, ReentrancyGuard {
         _;
     }
 
+    /**
+     *
+     * @param _totalSupply The total amount of tokens that can be allocated.
+     */
     constructor(uint256 _totalSupply) {
         if (_totalSupply == 0) revert CannotBeZero();
-
         totalSupply = _totalSupply;
 
         _grantRole(DEFAULT_ADMIN_ROLE, msg.sender);
@@ -199,11 +210,17 @@ contract GiniVesting is AccessControl, ReentrancyGuard {
         emit VestingInitialized(_vestingID, _cliffStartTimestamp, _startTimestamp, _endTimestamp);
     }
 
+    /**
+     * @notice Claim tokens from the specified vesting.
+     *         Emit a Claim event.
+     *
+     * @param _vestingID The ID of the vesting.
+     */
     function claim(uint256 _vestingID) external nonReentrant {
         Beneficiary storage beneficiary = beneficiaries[_vestingID][msg.sender];
         VestingPeriod memory vesting = vestingPeriods[_vestingID];
 
-        if (beneficiary.areTotallyClaimed == true) revert NothingToClaim();
+        if (beneficiary.areTotallyClaimed) revert NothingToClaim();
 
         uint256 amountToClaim = calculateClaimAmount(msg.sender, _vestingID);
         if (amountToClaim == 0)
@@ -212,8 +229,6 @@ contract GiniVesting is AccessControl, ReentrancyGuard {
             } else {
                 revert NothingToClaim();
             }
-
-        if (amountToClaim == 0) revert NothingToClaim();
 
         beneficiary.claimedAmount += amountToClaim;
         totalClaims[_vestingID] += amountToClaim;
@@ -280,6 +295,11 @@ contract GiniVesting is AccessControl, ReentrancyGuard {
         _token.safeTransfer(_to, _token.balanceOf(address(this)));
     }
 
+    /**
+     * @notice Set Gini token that will be used for vesting.
+     *
+     * @param _token   Address of the token.
+     */
     function setGiniToken(address _token) external onlyRole(DEFAULT_ADMIN_ROLE) notZeroAddress(_token) {
         gini = IERC20(_token);
 
@@ -516,17 +536,27 @@ contract GiniVesting is AccessControl, ReentrancyGuard {
         uint256 _totalAllocations,
         uint256 _startTimestamp,
         uint256 _duration
-    ) internal pure returns (uint256 claimableAmount) {
+    ) internal view returns (uint256 claimableAmount) {
         if (_timestamp < _startTimestamp) return 0;
 
-        uint256 elapsedMonths = _timestamp - _startTimestamp / CLAIM_INTERVAL;
+        uint256 elapsedMonths = _secondsToMonth(_timestamp - _startTimestamp);
 
         if (elapsedMonths == 0) return 0;
 
         if (_timestamp > _startTimestamp + _duration) {
             return _totalAllocations;
         } else {
-            claimableAmount = (_totalAllocations * elapsedMonths) / _duration;
+            uint256 amountPerMonth = _totalAllocations / (_duration / CLAIM_INTERVAL);
+            claimableAmount = amountPerMonth * elapsedMonths;
         }
+    }
+
+    /**
+     * @dev Convert seconds to months.
+     *
+     * @param _seconds The number of seconds.
+     */
+    function _secondsToMonth(uint256 _seconds) internal pure returns (uint256) {
+        return _seconds / 60 / 60 / 24 / 30;
     }
 }
