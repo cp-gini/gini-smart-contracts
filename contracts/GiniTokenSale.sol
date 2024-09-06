@@ -58,45 +58,83 @@ contract GiniTokenSale is AccessControl {
 
     // _______________ Errors _______________
 
+    /// @dev Revert if invalid phase params are passed.
     error InvalidPhaseParams(uint256 start, uint256 end);
 
-    error PriceFeedEqZeroAddr(address priceFeed);
-
+    /// @dev Revert if zero address is passed.
     error ZeroAddress();
 
+    /// @dev Revert if insufficient value is passed.
     error InsufficientValue();
 
+    /// @dev Revert if withdrawing during sale.
     error WithdrawingDuringSale();
 
+    /// @dev Revert if cannot buy zero tokens.
     error CannotBuyZeroTokens();
 
+    /// @dev Revert if purchase is not during sale time.
     error OnlyWhileSalePhase();
 
-    error PurchaseLimitReached(address user, uint256 maxCapPerUser, uint256 userPurchaseAmount);
-
+    /// @dev Revert if not allowed during sale.
     error NotAllowedDuringSale();
 
+    /// @dev Revert if total supply is reached.
     error TotalSupplyReached();
-
-    error OnlyUser();
 
     // _______________ Events _______________
 
+    /**
+     * @dev Emitted when the sale phase is set.
+     *
+     * @param start - the start timestamp of the sale
+     * @param end - the end timestamp of the sale
+     */
     event SalePhaseSet(uint256 start, uint256 end);
 
-    // event SetMaxCapPerUser(uint256 value);
-
+    /**
+     * @dev Emitted when the Gini price is set.
+     *
+     * @param value - the price of the Gini token
+     */
     event SetGiniPrice(uint256 value);
 
+    /**
+     * @dev Emitted when the purchase token is set.
+     *
+     * @param token - the address of the purchase token
+     */
+    event SetPurchaseToken(address token);
+
+    /**
+     * @dev Emitted when withdrawing ERC20 tokens or native token.
+     *
+     * @param recepient - the address of the recepient
+     * @param value - the amount of purchase token sent
+     */
     event Withdraw(address token, address recepient, uint256 value);
 
+    /**
+     * @dev Emitted when the Gini token is set.
+     *
+     * @param gini - the address of the Gini token
+     */
     event SetGiniToken(address gini);
 
+    /**
+     * @dev Emitted when a purchase is made.
+     *
+     * @param user - the address of the user
+     * @param amount - the amount of purchase token sent
+     */
     event Purchase(address user, uint256 amount);
 
+    /**
+     * @dev Emitted when the total supply is set.
+     *
+     * @param value - the total remaining amount of Gini tokens that can be purchased
+     */
     event SetTotalSupply(uint256 value);
-
-    event SetPurchaseToken(address token);
 
     // _______________ Modifiers _______________
 
