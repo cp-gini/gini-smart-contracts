@@ -1,11 +1,17 @@
 // This script contains the function for deployment and verification of the `contracts/PositiveEvenSetter.sol`.
-
 import hre from "hardhat";
+
+import { GiniToken } from "../../../../typechain-types";
+
 const ethers = hre.ethers;
 
-import type { PositiveEvenSetter } from "../../../../typechain-types";
-
-async function deployPositiveEvenSetter(): Promise<PositiveEvenSetter> {
+async function deployGiniToken(
+    name: string,
+    symbol: string,
+    totalSupply: bigint,
+    tokenSale: string,
+    tokenVesting: string
+): Promise<GiniToken> {
     /*
      * Hardhat always runs the compile task when running scripts with its command line interface.
      *
@@ -17,22 +23,27 @@ async function deployPositiveEvenSetter(): Promise<PositiveEvenSetter> {
     const [deployer] = await ethers.getSigners();
 
     // Deployment.
-    const PositiveEvenSetter = (await ethers.getContractFactory("PositiveEvenSetter")).connect(deployer);
-    const positiveEvenSetter: PositiveEvenSetter = await PositiveEvenSetter.deploy();
+    const gini = await ethers.deployContract(
+        "GiniToken",
+        [name, symbol, totalSupply, tokenSale, tokenVesting],
+        deployer
+    );
+    await gini.waitForDeployment();
 
-    await positiveEvenSetter.deployed();
-
-    console.log(`\`positiveEvenSetter\` is deployed to ${positiveEvenSetter.address}.`);
+    console.log(`\`Gini Token \` is deployed to ${gini.target}.`);
 
     // Verification of the deployed contract.
     if (hre.network.name !== "hardhat" && hre.network.name !== "localhost") {
         console.log("Sleeping before verification...");
         await new Promise((resolve) => setTimeout(resolve, 60000)); // 60 seconds.
 
-        await hre.run("verify:verify", { address: positiveEvenSetter.address, constructorArguments: [] });
+        await hre.run("verify:verify", {
+            address: gini.target,
+            constructorArguments: [name, symbol, totalSupply, tokenSale, tokenVesting]
+        });
     }
 
-    return positiveEvenSetter;
+    return gini;
 }
 
-export { deployPositiveEvenSetter };
+export { deployGiniToken };
