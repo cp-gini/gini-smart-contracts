@@ -69,57 +69,6 @@ describe("GiniToken", function () {
         });
     });
 
-    describe("# Pause control", function () {
-        it("Should allow to pause", async () => {
-            expect(await gini.paused()).to.be.false;
-
-            // Pause
-            await gini.pause();
-
-            // Check
-            expect(await gini.paused()).to.be.true;
-
-            // Check tokens transferring
-            await expect(gini.connect(publicSaleContract).transfer(deployer, addDec(1))).to.be.revertedWithCustomError(
-                gini,
-                "EnforcedPause"
-            );
-
-            // Check for burning token
-            await expect(gini.connect(publicSaleContract).burn(addDec(1))).to.be.revertedWithCustomError(
-                gini,
-                "EnforcedPause"
-            );
-        });
-
-        it("Should allow to unpause", async () => {
-            expect(await gini.paused()).to.be.false;
-
-            // Pause
-            await gini.pause();
-
-            // Check
-            expect(await gini.paused()).to.be.true;
-
-            // Unpause
-            await gini.unpause();
-
-            // Check
-            expect(await gini.paused()).to.be.false;
-        });
-
-        it("Should revert if caller is not admin", async () => {
-            await expect(gini.connect(publicSaleContract).pause()).to.be.revertedWithCustomError(
-                gini,
-                "AccessControlUnauthorizedAccount"
-            );
-            await expect(gini.connect(publicSaleContract).unpause()).to.be.revertedWithCustomError(
-                gini,
-                "AccessControlUnauthorizedAccount"
-            );
-        });
-    });
-
     describe("# Deny list control", function () {
         it("Should allow to add address to deny list", async () => {
             expect(await gini.denylist(deployer.address)).to.be.false;

@@ -29,7 +29,6 @@ describe("GiniTokenSale", function () {
     const SALE_TOTAL_SUPPLY = addDec(1500);
 
     const giniPrice = addDec(0.5);
-    const maxCapPerUser = addDec(1000);
 
     beforeEach(async () => {
         // Getting of signers
@@ -46,7 +45,7 @@ describe("GiniTokenSale", function () {
         // Deploy token sale contract
         sale = await ethers.deployContract(
             "GiniTokenSale",
-            [giniPrice, saleStart, saleEnd, usdc, maxCapPerUser, SALE_TOTAL_SUPPLY],
+            [giniPrice, saleStart, saleEnd, usdc, SALE_TOTAL_SUPPLY],
             deployer
         );
         await sale.waitForDeployment();
@@ -58,8 +57,6 @@ describe("GiniTokenSale", function () {
         // Set Gini token
         await sale.setGiniToken(gini);
 
-        // Set max cap per user
-
         snapshotA = await takeSnapshot();
     });
 
@@ -70,7 +67,6 @@ describe("GiniTokenSale", function () {
             expect(await sale.giniPrice()).to.eq(giniPrice);
             expect(await sale.getSaleTime()).to.deep.eq([saleStart, saleEnd]);
             expect(await sale.purchaseToken()).to.eq(usdc);
-            expect(await sale.maxCapPerUser()).to.eq(maxCapPerUser);
             expect(await sale.hasRole(await sale.DEFAULT_ADMIN_ROLE(), deployer.address)).to.be.true;
             expect(await sale.purchaseTokenDecimals()).to.eq(18);
             expect(await sale.totalSupply()).to.eq(SALE_TOTAL_SUPPLY);
@@ -78,7 +74,7 @@ describe("GiniTokenSale", function () {
 
         it("Should revert if initial gini price is equal zero", async () => {
             await expect(
-                ethers.deployContract("GiniTokenSale", [0, saleStart, saleEnd, usdc, maxCapPerUser, SALE_TOTAL_SUPPLY])
+                ethers.deployContract("GiniTokenSale", [0, saleStart, saleEnd, usdc, SALE_TOTAL_SUPPLY])
             ).to.be.revertedWithCustomError(sale, "InsufficientValue");
         });
 
@@ -92,14 +88,7 @@ describe("GiniTokenSale", function () {
 
             // Deploy and expect revert
             await expect(
-                ethers.deployContract("GiniTokenSale", [
-                    giniPrice,
-                    wrongStart,
-                    wrongEnd,
-                    usdc,
-                    maxCapPerUser,
-                    SALE_TOTAL_SUPPLY
-                ])
+                ethers.deployContract("GiniTokenSale", [giniPrice, wrongStart, wrongEnd, usdc, SALE_TOTAL_SUPPLY])
             )
                 .to.be.revertedWithCustomError(sale, "InvalidPhaseParams")
                 .withArgs(wrongStart, wrongEnd);
@@ -110,14 +99,7 @@ describe("GiniTokenSale", function () {
 
             // Deploy and expect revert
             await expect(
-                ethers.deployContract("GiniTokenSale", [
-                    giniPrice,
-                    wrongStart2,
-                    wrongEnd2,
-                    usdc,
-                    maxCapPerUser,
-                    SALE_TOTAL_SUPPLY
-                ])
+                ethers.deployContract("GiniTokenSale", [giniPrice, wrongStart2, wrongEnd2, usdc, SALE_TOTAL_SUPPLY])
             )
                 .to.be.revertedWithCustomError(sale, "InvalidPhaseParams")
                 .withArgs(wrongStart2, wrongEnd2);
@@ -130,21 +112,14 @@ describe("GiniTokenSale", function () {
                     saleStart,
                     saleEnd,
                     ethers.ZeroAddress,
-                    maxCapPerUser,
                     SALE_TOTAL_SUPPLY
                 ])
             ).to.be.revertedWithCustomError(sale, "ZeroAddress");
         });
 
-        it("Should revert if max cap per user is zero", async () => {
-            await expect(
-                ethers.deployContract("GiniTokenSale", [giniPrice, saleStart, saleEnd, usdc, 0, SALE_TOTAL_SUPPLY])
-            ).to.be.revertedWithCustomError(sale, "InsufficientValue");
-        });
-
         it("Should revert if total supply for sale is zero", async () => {
             await expect(
-                ethers.deployContract("GiniTokenSale", [giniPrice, saleStart, saleEnd, usdc, maxCapPerUser, 0])
+                ethers.deployContract("GiniTokenSale", [giniPrice, saleStart, saleEnd, usdc, 0])
             ).to.be.revertedWithCustomError(sale, "InsufficientValue");
         });
     });
@@ -174,27 +149,6 @@ describe("GiniTokenSale", function () {
                 await time.increaseTo(saleStart + 1);
 
                 await expect(sale.setGiniToken(gini)).to.be.revertedWithCustomError(sale, "NotAllowedDuringSale");
-            });
-        });
-
-        describe("# Max cap per user setter", function () {
-            it("Should allow to set max cap per user", async () => {
-                // Prepare new value
-                const newMaxCapPerUser = 100;
-
-                await expect(sale.setMaxCapPerUser(newMaxCapPerUser))
-                    .to.emit(sale, "SetMaxCapPerUser")
-                    .withArgs(newMaxCapPerUser);
-
-                // Check
-                expect(await sale.maxCapPerUser()).to.eq(newMaxCapPerUser);
-            });
-
-            it("Should revert if caller is not admin", async () => {
-                await expect(sale.connect(otherAcc).setMaxCapPerUser(100)).to.be.revertedWithCustomError(
-                    sale,
-                    "AccessControlUnauthorizedAccount"
-                );
             });
         });
     });
@@ -247,29 +201,6 @@ describe("GiniTokenSale", function () {
             await expect(sale.connect(deployer).purchase(100)).to.be.revertedWithCustomError(
                 sale,
                 "OnlyWhileSalePhase"
-            );
-        });
-
-        it("Should revert if user reached maximum for purchases", async () => {
-            // Prepare data
-            const firstAmount = addDec(2000);
-
-            // Skip start of the sale
-            await time.increaseTo(saleStart + 1);
-
-            // Approve
-            await usdc.connect(deployer).approve(sale, firstAmount);
-
-            // Purchase
-            await sale.connect(deployer).purchase(firstAmount);
-
-            // Check
-            expect(await sale.purchaseAmount(deployer)).to.eq(addDec(1000));
-
-            // Try to purchase again
-            await expect(sale.connect(deployer).purchase(addDec(0.02))).to.be.revertedWithCustomError(
-                sale,
-                "PurchaseLimitReached"
             );
         });
 
