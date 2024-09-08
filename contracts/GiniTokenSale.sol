@@ -136,13 +136,6 @@ contract GiniTokenSale is AccessControl {
      */
     event SetTotalSupply(uint256 value);
 
-    // _______________ Modifiers _______________
-
-    // modifier callerIsUser() {
-    //     if (tx.origin != _msgSender()) revert OnlyUser();
-    //     _;
-    // }
-
     // _______________ Constructor _______________
 
     /**
