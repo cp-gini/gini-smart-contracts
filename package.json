@@ -92,7 +92,7 @@
         "dotenv": "^16.3.1",
         "eslint": "^8.50.0",
         "eslint-config-prettier": "9.0.0",
-        "hardhat": "^2.22.5",
+        "hardhat": "^2.22.10",
         "hardhat-abi-exporter": "2.10.1",
         "hardhat-contract-sizer": "2.10.0",
         "hardhat-coverage": "^0.9.19",

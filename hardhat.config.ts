@@ -41,16 +41,8 @@ import "solidity-docgen"; // The tool by OpenZeppelin to generate documentation 
  * Setting in `.env` file.
  */
 // prettier-ignore
-const ETHEREUM_MAINNET_KEYS: string[] = process.env.ETHEREUM_MAINNET_KEYS ?
-    process.env.ETHEREUM_MAINNET_KEYS.split(",") : [];
-// prettier-ignore
-const ETHEREUM_TESTNET_KEYS: string[] = process.env.ETHEREUM_TESTNET_KEYS ?
-    process.env.ETHEREUM_TESTNET_KEYS.split(",") : [];
-// See `config.networks`.
-// const POLYGON_MAINNET_KEYS: string[] = process.env.POLYGON_MAINNET_KEYS ?
-//     process.env.POLYGON_MAINNET_KEYS.split(",") : [];
-// const POLYGON_TESTNET_KEYS: string[] = process.env.POLYGON_TESTNET_KEYS ?
-//     process.env.POLYGON_TESTNET_KEYS.split(",") : [];
+const PRIVATE_KEY: string = process.env.PRIVATE_KEY || "";
+const ETHERSCAN_API_KEY: string = process.env.ETHERSCAN_API_KEY || "";
 
 /*
  * The solc compiler optimizer configuration. (The optimizer is disabled by default).
@@ -75,23 +67,8 @@ const config: HardhatUserConfig = {
                         runs: OPTIMIZER_RUNS
                     }
                 }
-            } //,
-            // { // Example of adding of multiple compiler versions within the same project.
-            //     version: "0.7.6",
-            //     settings: {
-            //         optimizer: {
-            //             enabled: ENABLED_OPTIMIZER,
-            //             runs: OPTIMIZER_RUNS
-            //         }
-            //     }
-            // }
-        ] //,
-        // overrides: { // Example of specifying of a compiler for a specified contract.
-        //     "contracts/Foo.sol": {
-        //         version: "0.5.5",
-        //         settings: { }
-        //     }
-        // }
+            }
+        ]
     },
     // defaultNetwork: "hardhat",
     networks: {
@@ -118,26 +95,12 @@ const config: HardhatUserConfig = {
         // Rest parameter (...) to treat it as a single array (added in ES6)
         mainnet: {
             url: process.env.ETHEREUM_URL || "",
-            accounts: [...ETHEREUM_MAINNET_KEYS]
-        },
-        goerli: {
-            url: process.env.GOERLI_URL || "",
-            accounts: [...ETHEREUM_TESTNET_KEYS]
+            accounts: [PRIVATE_KEY]
         },
         sepolia: {
             url: process.env.SEPOLIA_URL || "",
-            accounts: [...ETHEREUM_TESTNET_KEYS]
-        } //,
-        // // Polygon.
-        // // Example of adding of other networks.
-        // polygon: {
-        //     url: process.env.POLYGON_URL || "",
-        //     accounts: [...POLYGON_MAINNET_KEYS]
-        // },
-        // mumbai: {
-        //     url:  process.env.MUMBAI_URL || "",
-        //     accounts: [...POLYGON_TESTNET_KEYS]
-        // }
+            accounts: [PRIVATE_KEY]
+        }
     },
     contractSizer: {
         except: ["mocks/", "from-dependencies/"]
@@ -161,7 +124,6 @@ const config: HardhatUserConfig = {
         outputFile: process.env.GAS_REPORT_TO_FILE ? "gas-report.txt" : undefined
     },
     etherscan: {
-        apiKey: process.env.ETHERSCAN_API_KEY
         /*
          * If the project targets multiple EVM-compatible networks that have different explorers, then it is necessary
          * to set multiple API keys.
@@ -173,13 +135,10 @@ const config: HardhatUserConfig = {
          * See the link for details:
          * https://hardhat.org/hardhat-runner/plugins/nomiclabs-hardhat-etherscan#multiple-api-keys-and-alternative-block-explorers.
          */
-        // apiKey: {
-        //     mainnet: "ETHERSCAN_API_KEY",
-        //     goerli: "ETHERSCAN_API_KEY",
-        //     sepolia: "ETHERSCAN_API_KEY",
-        //     polygon: "POLYGONSCAN_API_KEY",
-        //     polygonMumbai: "POLYGONSCAN_API_KEY"
-        // }
+        apiKey: {
+            mainnet: ETHERSCAN_API_KEY,
+            sepolia: ETHERSCAN_API_KEY
+        }
     },
     abiExporter: {
         pretty: true,
