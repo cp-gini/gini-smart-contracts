@@ -112,34 +112,6 @@ constructor(string _name, string _symbol, uint256 _totalSupply, address _publicS
 | _publicSaleContract | address | The address of the public sale contract |
 | _vestingContract | address | The address of the vesting contract |
 
-### pause
-
-```solidity
-function pause() external
-```
-
-Pauses all token transfers and burnings.
-
-Emits a `Paused` event.
-
-Requirements:
-- The caller should have the role `DEFAULT_ADMIN_ROLE`.
-- The contract should not be paused.
-
-### unpause
-
-```solidity
-function unpause() external
-```
-
-Unpauses all token transfers and burnings.
-
-Emits an `Unpaused` event.
-
-Requirements:
-- The caller should have the role `DEFAULT_ADMIN_ROLE`.
-- The contract should be paused.
-
 ### deny
 
 ```solidity

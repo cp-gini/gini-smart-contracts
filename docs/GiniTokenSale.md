@@ -33,14 +33,6 @@ uint256 giniPrice
 
 Stores the price of the Gini token.
 
-### maxCapPerUser
-
-```solidity
-uint256 maxCapPerUser
-```
-
-Stores the maximum amount of Gini tokens that can be purchased per user.
-
 ### purchaseTokenDecimals
 
 ```solidity
@@ -88,11 +80,7 @@ address of the user => amount of purchased Gini tokens
 error InvalidPhaseParams(uint256 start, uint256 end)
 ```
 
-### PriceFeedEqZeroAddr
-
-```solidity
-error PriceFeedEqZeroAddr(address priceFeed)
-```
+_Revert if invalid phase params are passed._
 
 ### ZeroAddress
 
@@ -100,11 +88,15 @@ error PriceFeedEqZeroAddr(address priceFeed)
 error ZeroAddress()
 ```
 
+_Revert if zero address is passed._
+
 ### InsufficientValue
 
 ```solidity
 error InsufficientValue()
 ```
+
+_Revert if insufficient value is passed._
 
 ### WithdrawingDuringSale
 
@@ -112,11 +104,15 @@ error InsufficientValue()
 error WithdrawingDuringSale()
 ```
 
+_Revert if withdrawing during sale._
+
 ### CannotBuyZeroTokens
 
 ```solidity
 error CannotBuyZeroTokens()
 ```
+
+_Revert if cannot buy zero tokens._
 
 ### OnlyWhileSalePhase
 
@@ -124,11 +120,7 @@ error CannotBuyZeroTokens()
 error OnlyWhileSalePhase()
 ```
 
-### PurchaseLimitReached
-
-```solidity
-error PurchaseLimitReached(address user, uint256 maxCapPerUser, uint256 userPurchaseAmount)
-```
+_Revert if purchase is not during sale time._
 
 ### NotAllowedDuringSale
 
@@ -136,11 +128,15 @@ error PurchaseLimitReached(address user, uint256 maxCapPerUser, uint256 userPurc
 error NotAllowedDuringSale()
 ```
 
+_Revert if not allowed during sale._
+
 ### TotalSupplyReached
 
 ```solidity
 error TotalSupplyReached()
 ```
+
+_Revert if total supply is reached._
 
 ### SalePhaseSet
 
@@ -148,11 +144,14 @@ error TotalSupplyReached()
 event SalePhaseSet(uint256 start, uint256 end)
 ```
 
-### SetMaxCapPerUser
+_Emitted when the sale phase is set._
 
-```solidity
-event SetMaxCapPerUser(uint256 value)
-```
+#### Parameters
+
+| Name | Type | Description |
+| ---- | ---- | ----------- |
+| start | uint256 | - the start timestamp of the sale |
+| end | uint256 | - the end timestamp of the sale |
 
 ### SetGiniPrice
 
@@ -160,29 +159,13 @@ event SetMaxCapPerUser(uint256 value)
 event SetGiniPrice(uint256 value)
 ```
 
-### Withdraw
+_Emitted when the Gini price is set._
 
-```solidity
-event Withdraw(address token, address recepient, uint256 value)
-```
+#### Parameters
 
-### SetGiniToken
-
-```solidity
-event SetGiniToken(address gini)
-```
-
-### Purchase
-
-```solidity
-event Purchase(address user, uint256 amount)
-```
-
-### SetTotalSupply
-
-```solidity
-event SetTotalSupply(uint256 value)
-```
+| Name | Type | Description |
+| ---- | ---- | ----------- |
+| value | uint256 | - the price of the Gini token |
 
 ### SetPurchaseToken
 
@@ -190,10 +173,77 @@ event SetTotalSupply(uint256 value)
 event SetPurchaseToken(address token)
 ```
 
+_Emitted when the purchase token is set._
+
+#### Parameters
+
+| Name | Type | Description |
+| ---- | ---- | ----------- |
+| token | address | - the address of the purchase token |
+
+### Withdraw
+
+```solidity
+event Withdraw(address token, address recepient, uint256 value)
+```
+
+_Emitted when withdrawing ERC20 tokens or native token._
+
+#### Parameters
+
+| Name | Type | Description |
+| ---- | ---- | ----------- |
+| token | address |  |
+| recepient | address | - the address of the recepient |
+| value | uint256 | - the amount of purchase token sent |
+
+### SetGiniToken
+
+```solidity
+event SetGiniToken(address gini)
+```
+
+_Emitted when the Gini token is set._
+
+#### Parameters
+
+| Name | Type | Description |
+| ---- | ---- | ----------- |
+| gini | address | - the address of the Gini token |
+
+### Purchase
+
+```solidity
+event Purchase(address user, uint256 amount)
+```
+
+_Emitted when a purchase is made._
+
+#### Parameters
+
+| Name | Type | Description |
+| ---- | ---- | ----------- |
+| user | address | - the address of the user |
+| amount | uint256 | - the amount of purchase token sent |
+
+### SetTotalSupply
+
+```solidity
+event SetTotalSupply(uint256 value)
+```
+
+_Emitted when the total supply is set._
+
+#### Parameters
+
+| Name | Type | Description |
+| ---- | ---- | ----------- |
+| value | uint256 | - the total remaining amount of Gini tokens that can be purchased |
+
 ### constructor
 
 ```solidity
-constructor(uint256 _giniPrice, uint256 _saleStart, uint256 _saleEnd, address _purchaseToken, uint256 _maxCapPerUser, uint256 _totalSupply) public
+constructor(uint256 _giniPrice, uint256 _saleStart, uint256 _saleEnd, address _purchaseToken, uint256 _totalSupply) public
 ```
 
 Initializes the contract with the given parameters.
@@ -206,7 +256,6 @@ Initializes the contract with the given parameters.
 | _saleStart | uint256 | - the start timestamp of the sale |
 | _saleEnd | uint256 | - the end timestamp of the sale |
 | _purchaseToken | address | - the address of the purchase token |
-| _maxCapPerUser | uint256 | - the maximum amount of Gini tokens that can be purchased per user |
 | _totalSupply | uint256 | - the total remaining amount of Gini tokens that can be purchased |
 
 ### purchase
@@ -229,7 +278,7 @@ Allows the user to purchase Gini tokens.
 function withdrawRemainingTokens(address _token, address _recipient) external payable
 ```
 
-Allows admin to withdraw the remaining amount of Gini tokens.
+Allows admin to withdraw the remaining ERC20 or native token.
 
 #### Parameters
 
@@ -260,20 +309,6 @@ Allows admin to set the address of the Gini token.
 | ---- | ---- | ----------- |
 | _token | address | - the address of the Gini token |
 
-### setMaxCapPerUser
-
-```solidity
-function setMaxCapPerUser(uint256 _value) external
-```
-
-Allows admin to set the maximum amount of Gini tokens that can be purchased per user.
-
-#### Parameters
-
-| Name | Type | Description |
-| ---- | ---- | ----------- |
-| _value | uint256 | - the maximum amount of Gini tokens that can be purchased per user |
-
 ### getReceivedAmount
 
 ```solidity
@@ -298,12 +333,6 @@ function getSaleTime() external view returns (uint256, uint256)
 | ---- | ---- | ----------- |
 | [0] | uint256 | the start and end time of the sale |
 | [1] | uint256 |  |
-
-### _setMaxCapPerUser
-
-```solidity
-function _setMaxCapPerUser(uint256 _value) internal
-```
 
 ### _setTotalSupply
 
