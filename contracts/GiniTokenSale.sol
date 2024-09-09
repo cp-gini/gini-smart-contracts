@@ -1,12 +1,14 @@
 // SPDX-License-Identifier: UNLICENSED
 pragma solidity 0.8.26;
 
-import "@openzeppelin/contracts/access/AccessControl.sol";
-import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
-import "@openzeppelin/contracts/utils/Address.sol";
-import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
+import "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
+import "@openzeppelin/contracts-upgradeable/access/AccessControlUpgradeable.sol";
 
-contract GiniTokenSale is AccessControl {
+import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
+import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
+import "@openzeppelin/contracts/utils/Address.sol";
+
+contract GiniTokenSale is Initializable, AccessControlUpgradeable {
     // _______________ Libraries _______________
 
     /*
@@ -136,7 +138,7 @@ contract GiniTokenSale is AccessControl {
      */
     event SetTotalSupply(uint256 value);
 
-    // _______________ Constructor _______________
+    // _______________ Initializer _______________
 
     /**
      * @notice Initializes the contract with the given parameters.
@@ -147,13 +149,15 @@ contract GiniTokenSale is AccessControl {
      * @param _purchaseToken - the address of the purchase token
      * @param _totalSupply - the total remaining amount of Gini tokens that can be purchased
      */
-    constructor(
+    function initialize(
         uint256 _giniPrice,
         uint256 _saleStart,
         uint256 _saleEnd,
         address _purchaseToken,
         uint256 _totalSupply
-    ) {
+    ) public initializer {
+        __AccessControl_init();
+
         _setGiniPrice(_giniPrice);
         _setSalePhase(_saleStart, _saleEnd);
         _setPurchaseToken(_purchaseToken);
