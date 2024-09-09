@@ -188,12 +188,12 @@ The [`GiniTokenSale`](./contracts/GiniTokenSale.sol) contract is a smart contrac
 -   **Purchase(address user, uint256 amount)**: Emitted when a purchase is made.
 -   **SetTotalSupply(uint256 value)**: Emitted when the total supply is set.
 
-#### Constructor
+#### Initializer
 
 Initializes the contract with the given parameters:
 
 ```solidity
-constructor(
+initialize(
     uint256 _giniPrice,
     uint256 _saleStart,
     uint256 _saleEnd,
@@ -259,6 +259,18 @@ constructor(
 
 The [`GiniVesting`](./contracts/GiniVesting.sol) contract is designed to manage the vesting of Gini tokens. It allows tokens to be released to beneficiaries over a specified vesting schedule. The contract ensures that tokens are released gradually and only after the vesting cliff has passed.
 
+### Documentation for `GiniVesting.sol`
+
+#### Overview
+
+The `GiniVesting` contract is designed to manage the vesting of tokens for different purposes such as team, foundation, and reserve. It includes mechanisms for setting vesting periods, allocating tokens, and handling claims.
+
+#### Vesting Types
+
+-   **Team**: Vesting for the team (equals to 0).
+-   **Foundation**: Vesting for the foundation (equals to 1).
+-   **Reserve**: Vesting for the reserve (equals to 2).
+
 #### Libraries
 
 -   **SafeERC20**: This library from OpenZeppelin is used to wrap around ERC20 operations that throw on failure, ensuring safety in token transfers.
@@ -272,16 +284,22 @@ The [`GiniVesting`](./contracts/GiniVesting.sol) contract is designed to manage 
     -   `bool areTotallyClaimed`: Indicates if the beneficiary has already claimed all tokens.
 
 -   **VestingPeriod**: Defines the design of a vesting period.
+
     -   `uint256 cliffStartTimestamp`: The start timestamp of the cliff period.
     -   `uint256 startTimestamp`: The start timestamp of the vesting period.
     -   `uint256 endTimestamp`: The end timestamp of the vesting period.
     -   `uint256 duration`: The duration of the vesting period.
 
+-   **VestingType**: Defines the type of the Vesting.
+    -   `Team`: Vesting for the team (equals to 0).
+    -   `Foundation`: Vesting for the foundation (equals to 1).
+    -   `Reserve`: Vesting for the reserve (equals to 2).
+
 #### Storage Variables
 
 -   **CLAIM_INTERVAL**: The interval at which claims can be made.
 
-    -   `uint256 public CLAIM_INTERVAL = 30 days`: The claim interval in days.
+    -   `uint256 public constant CLAIM_INTERVAL = 30 days`: The claim interval in days.
 
 -   **vestingPeriods**: A mapping that stores the vesting periods for each vesting ID.
 
@@ -301,7 +319,7 @@ The [`GiniVesting`](./contracts/GiniVesting.sol) contract is designed to manage 
 
 -   **beneficiaries**: A mapping that stores the beneficiary information for each vesting ID.
 
-    -   `mapping(uint256 => mapping(address => Beneficiary)) public beneficiaries`: Maps a vesting ID and beneficiary address to their beneficiary information.
+    -   `mapping(VestingType => mapping(address => Beneficiary)) public beneficiaries`: Maps a vesting ID and beneficiary address to their beneficiary information.
 
 -   **gini**: The ERC20 token being vested.
 
@@ -327,18 +345,18 @@ The [`GiniVesting`](./contracts/GiniVesting.sol) contract is designed to manage 
 -   **TotalSupplyReached()**: Reverted when the total supply is reached.
 -   **VestingTokenRescue(address token)**: Reverted when the vesting token rescue fails.
 -   **NothingToClaim()**: Reverted when there is nothing to claim.
--   **OnlyAfterVestingStart(uint256 vestingID)**: Reverted when the vesting is not started yet.
--   **ClaimAmountExceedsVestingAmount(uint256 \_vestingID, address \_beneficiary, uint256 \_claimAmount, uint256 \_totalAllocations)**: Reverted when the claim amount exceeds the vesting amount.
+-   **OnlyAfterVestingStart(VestingType vestingID)**: Reverted when the vesting is not started yet.
+-   **ClaimAmountExceedsVestingAmount(VestingType \_vestingID, address \_beneficiary, uint256 \_claimAmount, uint256 \_totalAllocations)**: Reverted when the claim amount exceeds the vesting amount.
 
 #### Events
 
--   **Claim(address indexed \_user, uint256 \_vestingID, uint256 indexed \_amount)**: Emitted when a claim is successful.
+-   **Claim(address indexed \_user, VestingType \_vestingID, uint256 indexed \_amount)**: Emitted when a claim is successful.
 
     -   `_user`: The address of the user.
     -   `_vestingID`: The ID of the vesting.
     -   `_amount`: The amount of the claim.
 
--   **VestingInitialized(uint256 indexed vestingID, uint256 cliffStartTimestamp, uint256 startTimestamp, uint256 endTimestamp)**: Emitted when the vesting is initialized.
+-   **VestingInitialized(VestingType indexed vestingID, uint256 cliffStartTimestamp, uint256 startTimestamp, uint256 endTimestamp)**: Emitted when the vesting is initialized.
 
     -   `vestingID`: The ID of the vesting.
     -   `cliffStartTimestamp`: The start timestamp of the cliff period.
@@ -359,19 +377,19 @@ The [`GiniVesting`](./contracts/GiniVesting.sol) contract is designed to manage 
 -   **notZeroAddress(address \_address)**: Ensures that the provided address is not zero.
     -   `_address`: The address to check.
 
-#### Constructor
+#### Initializer
 
 Initializes the contract with the given parameters:
 
 ```solidity
-constructor(uint256 _totalSupply)
+initialize(uint256 _totalSupply)
 ```
 
 -   `_totalSupply`: The total amount of tokens that can be allocated.
 
 #### External Functions
 
--   **initVesting(uint256 \_vestingID, uint256 \_cliffStartTimestamp, uint256 \_startTimestamp, uint256 \_endTimestamp, address[] calldata \_beneficiaries, uint256[] calldata \_amounts)**: Initializes a new vesting schedule.
+-   **initVesting(VestingType \_vestingID, uint256 \_cliffStartTimestamp, uint256 \_startTimestamp, uint256 \_endTimestamp, address[] calldata \_beneficiaries, uint256[] calldata \_amounts)**: Initializes a new vesting schedule.
 
     -   `_vestingID`: The ID of the vesting.
     -   `_cliffStartTimestamp`: The start timestamp of the cliff period.
@@ -380,7 +398,7 @@ constructor(uint256 _totalSupply)
     -   `_beneficiaries`: An array of beneficiary addresses.
     -   `_amounts`: An array of amounts corresponding to each beneficiary.
 
--   **claim(uint256 \_vestingID)**: Claims tokens from the specified vesting.
+-   **claim(VestingType \_vestingID)**: Claims tokens from the specified vesting.
 
     -   `_vestingID`: The ID of the vesting.
 
@@ -396,13 +414,13 @@ constructor(uint256 _totalSupply)
 
 #### Public Functions
 
--   **calculateClaimAmount(address \_beneficiary, uint256 \_vestingID)**: Calculates the claim amount for the beneficiary.
+-   **calculateClaimAmount(address \_beneficiary, VestingType \_vestingID)**: Calculates the claim amount for the beneficiary.
 
     -   `_beneficiary`: The address of the beneficiary.
     -   `_vestingID`: The ID of the vesting.
     -   Returns: The amount of tokens that can be claimed by the beneficiary.
 
--   **getVestingData(uint256 \_vestingID)**: Returns all vesting data.
+-   **getVestingData(VestingType \_vestingID)**: Returns all vesting data.
 
     -   `_vestingID`: The ID of the vesting.
     -   Returns: The vesting period, total allocations, and claimed amount.
@@ -433,13 +451,13 @@ constructor(uint256 _totalSupply)
 
 #### Internal Functions
 
--   **\_addBeneficiary(uint256 \_vestingID, address \_beneficiary, uint256 \_amount)**: Adds a beneficiary to the vesting.
+-   **\_addBeneficiary(VestingType \_vestingID, address \_beneficiary, uint256 \_amount)**: Adds a beneficiary to the vesting.
 
     -   `_vestingID`: The ID of the vesting.
     -   `_beneficiary`: The address of the beneficiary.
     -   `_amount`: The amount of tokens to be vested.
 
--   **\_validateNSetVesting(uint256 \_vestingID, uint256 \_cliffStartTimestamp, uint256 \_startTimestamp, uint256 \_endTimestamp)**: Validates and sets the vesting parameters.
+-   **\_validateNSetVesting(VestingType \_vestingID, uint256 \_cliffStartTimestamp, uint256 \_startTimestamp, uint256 \_endTimestamp)**: Validates and sets the vesting parameters.
 
     -   `_vestingID`: The ID of the vesting.
     -   `_cliffStartTimestamp`: The start timestamp of the cliff period.
@@ -464,6 +482,10 @@ constructor(uint256 _totalSupply)
 
 This script is used for the deployment and automatic verification of all the contracts located in the [`contracts/`](./contracts/) directory. The script ensures that the contracts are deployed in the correct order and that their interdependencies are properly configured.
 
+### Get timestamp time for future steps
+
+You can get the time stamp of any time using this resource [`Epoch Converter`](https://www.epochconverter.com/)
+
 #### Detailed Steps
 
 1. **Import Statements**
@@ -472,7 +494,6 @@ This script is used for the deployment and automatic verification of all the con
 
     ```typescript
     import { addDec } from "../../test/helpers";
-    import { time } from "@nomicfoundation/hardhat-toolbox/network-helpers";
     import { deployGiniTokenSale } from "./separately/exported-functions/deployGiniTokenSale";
     import { deployGiniVesting } from "./separately/exported-functions/deployGiniVesting";
     import { deployGiniToken } from "./separately/exported-functions/deployGiniToken";
@@ -492,8 +513,8 @@ This script is used for the deployment and automatic verification of all the con
 
     ```typescript
     const giniPrice = addDec(0.5); // equal to 0.5 stable coin
-    const saleStart = (await time.latest()) + 1000; // Means that the sale will start after 1000 seconds of running the script
-    const saleEnd = saleStart + time.duration.years(1); // Means that the sale will end after 1 year
+    const saleStart = 1000; // The timestamp of the sale start
+    const saleEnd = 2000; // The timestamp of the sale end
     const purchaseToken = ""; // The address of the stable coin
     const totalSupply = addDec(30_000); // Total supply for the sale
 
@@ -553,3 +574,85 @@ The order for the separately deployment:
 1. `Gini Token Sale` (after deployment save the address of the token sale contract).
 2. `Gini Vesting` (after deployment save the address of the token vesting contract).
 3. `Gini Token` (Set nearly deploy contracts required for the constructor).
+
+### Documentation for `initVesting.ts`
+
+#### Overview
+
+The [`initVesting.ts`](./scripts/initVesting.ts) script is used to initialize a vesting schedule for the [`GiniVesting`] contract. It sets up the vesting parameters, including the vesting ID, timestamps for the cliff, start, and end of the vesting period, and the beneficiaries along with their respective token amounts.
+
+#### Detailed Steps
+
+1. **Import Statements**
+
+    - The script imports necessary modules and functions, including the Hardhat runtime environment [`hre`] for decimal adjustments.
+
+    ```typescript
+    import hre from "hardhat";
+    import { addDec } from "../test/helpers";
+    ```
+
+2. **Initialize ethers**
+
+    - The [`ethers`]object is initialized from the Hardhat runtime environment.
+
+    ```typescript
+    const ethers = hre.ethers;
+    ```
+
+3. **Addresses**
+
+    - The address of the [`GiniVesting`](./contracts/GiniVesting.sol) contract is defined. This should be replaced with the actual contract address.
+
+    ```typescript
+    const VESTING = "";
+    ```
+
+4. **Main Function: [`initVesting`](./scripts/initVesting.ts)**
+
+    - The [`initVesting`] function is defined to initialize the vesting schedule.
+
+    ```typescript
+    async function initVesting() {
+    ```
+
+5. **Get Signer**
+
+    - The script retrieves the signer (admin) from the list of available signers.
+
+    ```typescript
+    const [admin] = await ethers.getSigners();
+    ```
+
+6. **Get Vesting Contract**
+
+    - The script retrieves the [`GiniVesting`](./contracts/GiniVesting.sol)
+
+    ```typescript
+    const vesting = await ethers.getContractAt("GiniVesting", VESTING);
+    ```
+
+7. **Prepare Data for Vesting**
+
+    - The script prepares the data required for initializing the vesting schedule, including the vesting ID, cliff start timestamp, start timestamp, end timestamp, beneficiaries, and amounts.
+
+    ```typescript
+    const vestingID = 1; // ID of the vesting
+    const cliffStartTimestamp = 1725918160; // Cliff start timestamp of the vesting
+    const startTimestamp = 1725919160; // Start timestamp of the vesting
+    const endTimestamp = 1725928160; // End timestamp of the vesting
+    const beneficiaries = [admin.address];
+    const amounts = [addDec(250)];
+    ```
+
+    The script run the following function in the contract [`GiniVesting`](./contracts/GiniVesting.sol)
+
+    ```typescript
+    await vesting.initVesting(vestingID, cliffStartTimestamp, startTimestamp, endTimestamp, beneficiaries, amounts);
+    ```
+
+#### To run the script use following command
+
+```bash
+npx hardhat run scripts/initVesting.ts --network <network-name>
+```
