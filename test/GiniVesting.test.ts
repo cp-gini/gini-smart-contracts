@@ -3,11 +3,11 @@ import type { SnapshotRestorer } from "@nomicfoundation/hardhat-toolbox/network-
 import { takeSnapshot, time } from "@nomicfoundation/hardhat-toolbox/network-helpers";
 
 import { expect } from "chai";
-import { ethers } from "hardhat";
+import { ethers, upgrades } from "hardhat";
 import type { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 
-import { addDec, eth } from "./helpers";
-import { GiniToken, GiniTokenSale, GiniVesting, USDC } from "../typechain-types";
+import { addDec } from "./helpers";
+import { GiniToken, GiniVesting, USDC } from "../typechain-types";
 
 describe("GiniVesting", function () {
     let snapshotA: SnapshotRestorer;
@@ -15,6 +15,7 @@ describe("GiniVesting", function () {
     let deployer: HardhatEthersSigner;
     let user1: HardhatEthersSigner;
     let user2: HardhatEthersSigner;
+    let user3: HardhatEthersSigner;
     let sale: HardhatEthersSigner;
     let otherAcc: HardhatEthersSigner;
 
@@ -29,14 +30,15 @@ describe("GiniVesting", function () {
 
     beforeEach(async () => {
         // Getting of signers
-        [deployer, sale, otherAcc, user1, user2, otherAcc] = await ethers.getSigners();
+        [deployer, sale, otherAcc, user1, user2, user3] = await ethers.getSigners();
 
         // Deploy purchase token
         usdc = await ethers.deployContract("USDC", [addDec(100_000)]);
         await usdc.waitForDeployment();
 
         // Deploy vesting contract
-        vesting = await ethers.deployContract("GiniVesting", [addDec(10_000)], deployer);
+        const GiniVesting = await ethers.getContractFactory("GiniVesting", deployer);
+        vesting = <GiniVesting>(<unknown>await upgrades.deployProxy(GiniVesting, [addDec(10_000)]));
         await vesting.waitForDeployment();
 
         // Deploy GINI token
@@ -51,16 +53,21 @@ describe("GiniVesting", function () {
 
     afterEach(async () => await snapshotA.restore());
 
-    describe("# Constructor", function () {
+    describe("# Initializer", function () {
         it("Should set all values correctly", async () => {
             expect(await vesting.totalSupply()).to.equal(addDec(10_000));
             expect(await vesting.hasRole(await vesting.DEFAULT_ADMIN_ROLE(), deployer.address)).to.equal(true);
         });
 
         it("Should revert if total supply is zero", async () => {
-            await expect(ethers.deployContract("GiniVesting", [0])).to.be.revertedWithCustomError(
+            const GiniVesting = await ethers.getContractFactory("GiniVesting", deployer);
+            await expect(upgrades.deployProxy(GiniVesting, [0])).to.be.revertedWithCustomError(vesting, "CannotBeZero");
+        });
+
+        it("Should revert when trying to initialize again", async () => {
+            await expect(vesting.initialize(addDec(10_000))).to.be.revertedWithCustomError(
                 vesting,
-                "CannotBeZero"
+                "InvalidInitialization"
             );
         });
     });
@@ -314,6 +321,147 @@ describe("GiniVesting", function () {
                     amounts
                 )
             ).to.be.revertedWithCustomError(vesting, "TotalSupplyReached");
+        });
+    });
+
+    describe("# Add beneficiaries to the vesting", function () {
+        // Data for the first vesting
+        let vestingID: number;
+        let cliffStartTimestamp: number;
+        let startTimestamp: number;
+        let endTimestamp: number;
+        let beneficiaries: HardhatEthersSigner[];
+        let amounts: bigint[];
+
+        beforeEach(async () => {
+            // Prepare data for the vesting
+            vestingID = 1;
+            cliffStartTimestamp = (await time.latest()) + 100;
+            startTimestamp = cliffStartTimestamp + 1000;
+            endTimestamp = startTimestamp + time.duration.years(1);
+            beneficiaries = [user1, user2];
+            amounts = [addDec(250), addDec(100)];
+
+            // Initialize vesting
+            await expect(
+                vesting.initVesting(
+                    vestingID,
+                    cliffStartTimestamp,
+                    startTimestamp,
+                    endTimestamp,
+                    beneficiaries,
+                    amounts
+                )
+            )
+                .to.emit(vesting, "VestingInitialized")
+                .withArgs(vestingID, cliffStartTimestamp, startTimestamp, endTimestamp);
+        });
+
+        it("Should allow to add beneficiaries to the vesting", async () => {
+            // Add beneficiaries
+            const newBeneficiaries = [user3, otherAcc];
+            const newAmounts = [addDec(100), addDec(50)];
+
+            // Save data before adding
+            const totalSupply = await vesting.totalSupply();
+
+            // Add beneficiaries
+            await expect(vesting.addBeneficiaries(vestingID, newBeneficiaries, newAmounts))
+                .to.emit(vesting, "BeneficiariesAdded")
+                .withArgs(vestingID);
+
+            // Check
+            expect(await vesting.totalSupply()).to.equal(totalSupply - addDec(100) - addDec(50));
+            expect(await vesting.commonAllocations(vestingID)).to.equal(
+                addDec(250) + addDec(100) + addDec(100) + addDec(50)
+            );
+            expect(await vesting.getUserVestings(user3)).to.deep.eq([vestingID]);
+            expect(await vesting.getUserVestings(otherAcc)).to.deep.eq([vestingID]);
+            expect(await vesting.beneficiaries(vestingID, user3)).to.deep.eq([addDec(100), 0, false]);
+            expect(await vesting.beneficiaries(vestingID, otherAcc)).to.deep.eq([addDec(50), 0, false]);
+
+            // Skip some time to the start of the vesting
+            await time.increaseTo(startTimestamp + time.duration.days(60));
+
+            const user3Balance = await gini.balanceOf(user3);
+
+            // Claim tokens from the new beneficiaries
+            await vesting.connect(user3).claim(vestingID);
+
+            // Check
+            expect(await gini.balanceOf(user3)).to.eq(user3Balance + (addDec(100) / 12n) * 2n);
+
+            // Check that the new beneficiaries are not totally claimed
+            const updatedBeneficiary = await vesting.beneficiaries(vestingID, user3);
+            expect(updatedBeneficiary.areTotallyClaimed).to.be.false;
+
+            // Skip to the end of the vesting and claim all tokens
+            await time.increaseTo(endTimestamp + time.duration.weeks(5));
+
+            await vesting.connect(user3).claim(vestingID);
+
+            // Check that the new beneficiaries are totally claimed
+            const updatedBeneficiary2 = await vesting.beneficiaries(vestingID, user3);
+            expect(updatedBeneficiary2.areTotallyClaimed).to.be.true;
+
+            // Check that the total claims are correct
+            expect(await gini.balanceOf(user3)).to.eq(addDec(100));
+        });
+
+        it("Should revert if caller is not admin", async () => {
+            await expect(vesting.connect(user1).addBeneficiaries(vestingID, [], [])).to.be.revertedWithCustomError(
+                vesting,
+                "AccessControlUnauthorizedAccount"
+            );
+        });
+
+        it("Should revert if vesting is not initialized", async () => {
+            // Add beneficiaries
+            const newBeneficiaries = [user3, otherAcc];
+            const newAmounts = [addDec(100), addDec(50)];
+
+            await expect(vesting.addBeneficiaries(vestingID + 1, newBeneficiaries, newAmounts))
+                .to.be.revertedWithCustomError(vesting, "VestingNotInitialized")
+                .withArgs(vestingID + 1);
+        });
+
+        it("Should revert if vesting cliff is already started", async () => {
+            // Add beneficiaries
+            const newBeneficiaries = [user3, otherAcc];
+            const newAmounts = [addDec(100), addDec(50)];
+
+            // Skip time to the start of the vesting cliff
+            await time.increaseTo(cliffStartTimestamp + 1);
+
+            // Add new beneficiaries and expect revert
+            await expect(
+                vesting.addBeneficiaries(vestingID, newBeneficiaries, newAmounts)
+            ).to.be.revertedWithCustomError(vesting, "OnlyBeforeVestingCliff");
+        });
+
+        it("Should revert if beneficiary is empty", async () => {
+            await expect(vesting.addBeneficiaries(vestingID, [], [])).to.be.revertedWithCustomError(
+                vesting,
+                "NoBeneficiaries"
+            );
+        });
+
+        it("Should revert if beneficiary and amounts have different length", async () => {
+            await expect(
+                vesting.addBeneficiaries(vestingID, [user1], [addDec(250), addDec(100)])
+            ).to.be.revertedWithCustomError(vesting, "ArraysLengthMismatch");
+        });
+
+        it("Should revert if total supply reached", async () => {
+            // Prepare data for the vesting
+            const beneficiaries = [otherAcc];
+            const amounts = [(await vesting.totalSupply()) + 1n];
+
+            // Initialize vesting
+            await expect(vesting.addBeneficiaries(vestingID, beneficiaries, amounts)).to.be.revertedWithCustomError(
+                vesting,
+                "TotalSupplyReached"
+            );
         });
     });
 
