@@ -1,12 +1,14 @@
 // SPDX-License-Identifier: UNLICENSED
 pragma solidity 0.8.26;
 
+import "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
+import "@openzeppelin/contracts-upgradeable/utils/ReentrancyGuardUpgradeable.sol";
+import "@openzeppelin/contracts-upgradeable/access/AccessControlUpgradeable.sol";
+
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
-import "@openzeppelin/contracts/access/AccessControl.sol";
-import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 
-contract GiniVesting is AccessControl, ReentrancyGuard {
+contract GiniVesting is AccessControlUpgradeable, ReentrancyGuardUpgradeable {
     // _______________ Libraries _______________
 
     /*
@@ -43,26 +45,39 @@ contract GiniVesting is AccessControl, ReentrancyGuard {
         uint256 duration;
     }
 
+    /**
+     * @notice The type of the vesting.
+     *
+     * 1. Team - Vesting for the team.
+     * 2. Foundation - Vesting for the foundation.
+     * 3. Reserve - Vesting for the reserve.
+     */
+    enum VestingType {
+        Team,
+        Foundation,
+        Reserve
+    }
+
     // _______________ Storage _______________
 
-    uint256 public CLAIM_INTERVAL = 30 days;
+    uint256 public constant CLAIM_INTERVAL = 30 days;
 
     // _______________ Storage _______________
 
-    /// @notice Vesting ID => Vesting Period.
-    mapping(uint256 => VestingPeriod) public vestingPeriods;
+    /// @notice Vesting Type => Vesting Period.
+    mapping(VestingType => VestingPeriod) public vestingPeriods;
 
     /// @notice Vesting ID => The total allocations for all accounts.
-    mapping(uint256 => uint256) public commonAllocations;
+    mapping(VestingType => uint256) public commonAllocations;
 
     /// @notice Vesting ID => The total claims for all accounts.
-    mapping(uint256 => uint256) public totalClaims;
+    mapping(VestingType => uint256) public totalClaims;
 
     /// @notice User => All vesting IDs of the user.
     mapping(address => uint256[]) public userVestings;
 
     /// @notice Vesting ID => Beneficiary => Beneficiary info.
-    mapping(uint256 => mapping(address => Beneficiary)) public beneficiaries;
+    mapping(VestingType => mapping(address => Beneficiary)) public beneficiaries;
 
     /// @notice The vesting token.
     IERC20 public gini;
@@ -109,15 +124,19 @@ contract GiniVesting is AccessControl, ReentrancyGuard {
     error NothingToClaim();
 
     /// @dev Revert if vesting is not started yet.
-    error OnlyAfterVestingStart(uint256 vestingID);
+    error OnlyAfterVestingStart(VestingType vestingID);
 
     /// @dev Revert if claim amount exceeds vesting amount.
     error ClaimAmountExceedsVestingAmount(
-        uint256 _vestingID,
+        VestingType _vestingID,
         address _beneficiary,
         uint256 _claimAmount,
         uint256 _totalAllocations
     );
+
+    error VestingNotInitialized(VestingType vestingID);
+
+    error OnlyBeforeVestingCliff();
 
     // _______________ Events _______________
 
@@ -127,13 +146,13 @@ contract GiniVesting is AccessControl, ReentrancyGuard {
      * @param _user   Address of the user.
      * @param _amount   Amount of the claim.
      */
-    event Claim(address indexed _user, uint256 _vestingID, uint256 indexed _amount);
+    event Claim(address indexed _user, VestingType _vestingID, uint256 indexed _amount);
 
     /**
      * @dev Emitted when the vesting is initialized.
      */
     event VestingInitialized(
-        uint256 indexed vestingID,
+        VestingType indexed vestingID,
         uint256 cliffStartTimestamp,
         uint256 startTimestamp,
         uint256 endTimestamp
@@ -149,6 +168,11 @@ contract GiniVesting is AccessControl, ReentrancyGuard {
      */
     event ERC20Rescued(address indexed _token, address indexed _to, uint256 indexed _amount);
 
+    /**
+     * @dev Emitted when beneficiaries are added.
+     */
+    event BeneficiariesAdded(VestingType indexed vestingID);
+
     // _______________ Modifiers _______________
 
     modifier notZeroAddress(address _address) {
@@ -160,7 +184,10 @@ contract GiniVesting is AccessControl, ReentrancyGuard {
      *
      * @param _totalSupply The total amount of tokens that can be allocated.
      */
-    constructor(uint256 _totalSupply) {
+    function initialize(uint256 _totalSupply) public initializer {
+        __AccessControl_init();
+        __ReentrancyGuard_init();
+
         if (_totalSupply == 0) revert CannotBeZero();
         totalSupply = _totalSupply;
 
@@ -180,7 +207,7 @@ contract GiniVesting is AccessControl, ReentrancyGuard {
      * Emits a VestingInitialized event.
      */
     function initVesting(
-        uint256 _vestingID,
+        VestingType _vestingID,
         uint256 _cliffStartTimestamp,
         uint256 _startTimestamp,
         uint256 _endTimestamp,
@@ -210,13 +237,43 @@ contract GiniVesting is AccessControl, ReentrancyGuard {
         emit VestingInitialized(_vestingID, _cliffStartTimestamp, _startTimestamp, _endTimestamp);
     }
 
+    function addBeneficiaries(
+        VestingType _vestingID,
+        address[] calldata _beneficiary,
+        uint256[] calldata _amount
+    ) external onlyRole(DEFAULT_ADMIN_ROLE) {
+        VestingPeriod memory vesting = vestingPeriods[_vestingID];
+        uint256 length = _beneficiary.length;
+        uint256 totalAllocations = 0;
+
+        // Check that vesting already exist and cliff period is not started yet
+        if (vesting.startTimestamp == 0) revert VestingNotInitialized(_vestingID);
+        if (vesting.cliffStartTimestamp < block.timestamp) revert OnlyBeforeVestingCliff();
+
+        // Check that arrays are not empty and have the same length
+        if (_beneficiary.length == 0) revert NoBeneficiaries();
+        if (_beneficiary.length != _amount.length) revert ArraysLengthMismatch(_beneficiary.length, _amount.length);
+
+        for (uint256 i = 0; i < length; i++) {
+            _addBeneficiary(_vestingID, _beneficiary[i], _amount[i]);
+            totalAllocations += _amount[i];
+        }
+
+        if (totalSupply < totalAllocations) revert TotalSupplyReached();
+
+        totalSupply -= totalAllocations;
+        commonAllocations[_vestingID] += totalAllocations;
+
+        emit BeneficiariesAdded(_vestingID);
+    }
+
     /**
      * @notice Claim tokens from the specified vesting.
      *         Emit a Claim event.
      *
      * @param _vestingID The ID of the vesting.
      */
-    function claim(uint256 _vestingID) external nonReentrant {
+    function claim(VestingType _vestingID) external nonReentrant {
         Beneficiary storage beneficiary = beneficiaries[_vestingID][msg.sender];
         VestingPeriod memory vesting = vestingPeriods[_vestingID];
 
@@ -254,20 +311,20 @@ contract GiniVesting is AccessControl, ReentrancyGuard {
         uint256 totalClaimAmount = 0;
 
         for (uint256 i = 0; i < length; i++) {
-            Beneficiary storage beneficiary = beneficiaries[vestingIDs[i]][msg.sender];
+            Beneficiary storage beneficiary = beneficiaries[VestingType(vestingIDs[i])][msg.sender];
 
-            uint256 amountToClaim = calculateClaimAmount(msg.sender, vestingIDs[i]);
+            uint256 amountToClaim = calculateClaimAmount(msg.sender, VestingType(vestingIDs[i]));
             if (amountToClaim == 0) continue;
 
             beneficiary.claimedAmount += amountToClaim;
-            totalClaims[vestingIDs[i]] += amountToClaim;
+            totalClaims[VestingType(vestingIDs[i])] += amountToClaim;
             totalClaimAmount += amountToClaim;
 
             if (beneficiary.claimedAmount == beneficiary.totalAllocations) {
                 beneficiary.areTotallyClaimed = true;
             }
 
-            emit Claim(msg.sender, vestingIDs[i], amountToClaim);
+            emit Claim(msg.sender, VestingType(vestingIDs[i]), amountToClaim);
         }
 
         if (totalClaimAmount == 0) revert NothingToClaim();
@@ -318,7 +375,10 @@ contract GiniVesting is AccessControl, ReentrancyGuard {
      *
      * @return claimAmount   Amount of tokens that can be claimed by the beneficiary.
      */
-    function calculateClaimAmount(address _beneficiary, uint256 _vestingID) public view returns (uint256 claimAmount) {
+    function calculateClaimAmount(
+        address _beneficiary,
+        VestingType _vestingID
+    ) public view returns (uint256 claimAmount) {
         Beneficiary memory beneficiary = beneficiaries[_vestingID][_beneficiary];
         VestingPeriod memory vesting = vestingPeriods[_vestingID];
         uint256 alreadyClaimed = beneficiary.claimedAmount;
@@ -359,7 +419,7 @@ contract GiniVesting is AccessControl, ReentrancyGuard {
      * claimedAmount - amount that the all beneficiaries has already claimed.
      */
     function getVestingData(
-        uint256 _vestingID
+        VestingType _vestingID
     ) external view returns (VestingPeriod memory _vestingData, uint256 totalAllocations, uint256 claimedAmount) {
         _vestingData = vestingPeriods[_vestingID];
         totalAllocations = commonAllocations[_vestingID];
@@ -384,7 +444,7 @@ contract GiniVesting is AccessControl, ReentrancyGuard {
         uint256[] memory amounts = new uint256[](length);
 
         for (uint256 i = 0; i < length; i++) {
-            uint256 claimAmount = calculateClaimAmount(_beneficiary, userVestings[_beneficiary][i]);
+            uint256 claimAmount = calculateClaimAmount(_beneficiary, VestingType(userVestings[_beneficiary][i]));
 
             totalAmount += claimAmount;
             amounts[i] = claimAmount;
@@ -407,7 +467,7 @@ contract GiniVesting is AccessControl, ReentrancyGuard {
         uint256[] memory vestingsDuration = new uint256[](length);
 
         for (uint256 i = 0; i < length; i++) {
-            vestingsDuration[i] = vestingPeriods[allUserVestings[i]].duration;
+            vestingsDuration[i] = vestingPeriods[VestingType(allUserVestings[i])].duration;
         }
 
         return (allUserVestings, vestingsDuration);
@@ -429,7 +489,7 @@ contract GiniVesting is AccessControl, ReentrancyGuard {
         uint256[] memory totalAllocations = new uint256[](length);
 
         for (uint256 i = 0; i < length; i++) {
-            totalAllocations[i] = beneficiaries[allUserVestings[i]][_beneficiary].totalAllocations;
+            totalAllocations[i] = beneficiaries[VestingType(allUserVestings[i])][_beneficiary].totalAllocations;
         }
 
         return (allUserVestings, totalAllocations);
@@ -449,7 +509,7 @@ contract GiniVesting is AccessControl, ReentrancyGuard {
         uint256[] memory totalClaimed = new uint256[](length);
 
         for (uint256 i = 0; i < length; i++) {
-            totalClaimed[i] = beneficiaries[allUserVestings[i]][_beneficiary].claimedAmount;
+            totalClaimed[i] = beneficiaries[VestingType(allUserVestings[i])][_beneficiary].claimedAmount;
         }
 
         return (allUserVestings, totalClaimed);
@@ -474,7 +534,7 @@ contract GiniVesting is AccessControl, ReentrancyGuard {
      * @param _vestingID   ID of the vesting.
      */
     function _addBeneficiary(
-        uint256 _vestingID,
+        VestingType _vestingID,
         address _beneficiary,
         uint256 _amount
     ) internal notZeroAddress(_beneficiary) {
@@ -488,7 +548,7 @@ contract GiniVesting is AccessControl, ReentrancyGuard {
             areTotallyClaimed: false
         });
 
-        userVestings[_beneficiary].push(_vestingID);
+        userVestings[_beneficiary].push(uint256(_vestingID));
     }
 
     /**
@@ -499,7 +559,7 @@ contract GiniVesting is AccessControl, ReentrancyGuard {
      * @param _endTimestamp The timestamp of the vesting end.
      */
     function _validateNSetVesting(
-        uint256 _vestingID,
+        VestingType _vestingID,
         uint256 _cliffStartTimestamp,
         uint256 _startTimestamp,
         uint256 _endTimestamp
@@ -536,7 +596,7 @@ contract GiniVesting is AccessControl, ReentrancyGuard {
         uint256 _totalAllocations,
         uint256 _startTimestamp,
         uint256 _duration
-    ) internal view returns (uint256 claimableAmount) {
+    ) internal pure returns (uint256 claimableAmount) {
         if (_timestamp < _startTimestamp) return 0;
 
         uint256 elapsedMonths = _secondsToMonth(_timestamp - _startTimestamp);
