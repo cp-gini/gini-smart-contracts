@@ -3,7 +3,7 @@ import type { SnapshotRestorer } from "@nomicfoundation/hardhat-toolbox/network-
 import { takeSnapshot, time } from "@nomicfoundation/hardhat-toolbox/network-helpers";
 
 import { expect } from "chai";
-import { ethers } from "hardhat";
+import { ethers, upgrades } from "hardhat";
 import type { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 
 import { addDec, eth } from "./helpers";
@@ -43,10 +43,9 @@ describe("GiniTokenSale", function () {
         saleEnd = saleStart + time.duration.days(2);
 
         // Deploy token sale contract
-        sale = await ethers.deployContract(
-            "GiniTokenSale",
-            [giniPrice, saleStart, saleEnd, usdc, SALE_TOTAL_SUPPLY],
-            deployer
+        const Sale = await ethers.getContractFactory("GiniTokenSale", deployer);
+        sale = <GiniTokenSale>(
+            (<unknown>await upgrades.deployProxy(Sale, [giniPrice, saleStart, saleEnd, usdc.target, SALE_TOTAL_SUPPLY]))
         );
         await sale.waitForDeployment();
 
@@ -62,7 +61,7 @@ describe("GiniTokenSale", function () {
 
     afterEach(async () => await snapshotA.restore());
 
-    describe("# Constructor", function () {
+    describe("# Initializer", function () {
         it("Should allow to set all values correctly", async () => {
             expect(await sale.giniPrice()).to.eq(giniPrice);
             expect(await sale.getSaleTime()).to.deep.eq([saleStart, saleEnd]);
@@ -73,8 +72,10 @@ describe("GiniTokenSale", function () {
         });
 
         it("Should revert if initial gini price is equal zero", async () => {
+            const Sale = await ethers.getContractFactory("GiniTokenSale", deployer);
+
             await expect(
-                ethers.deployContract("GiniTokenSale", [0, saleStart, saleEnd, usdc, SALE_TOTAL_SUPPLY])
+                upgrades.deployProxy(Sale, [0, saleStart, saleEnd, usdc.target, SALE_TOTAL_SUPPLY])
             ).to.be.revertedWithCustomError(sale, "InsufficientValue");
         });
 
@@ -82,14 +83,13 @@ describe("GiniTokenSale", function () {
             // Prepare data for the first case
             const wrongStart = await time.latest();
             const wrongEnd = wrongStart + time.duration.days(2);
+            const Sale = await ethers.getContractFactory("GiniTokenSale", deployer);
 
             // Skip start of the sale
             await time.increaseTo(wrongStart + 1);
 
             // Deploy and expect revert
-            await expect(
-                ethers.deployContract("GiniTokenSale", [giniPrice, wrongStart, wrongEnd, usdc, SALE_TOTAL_SUPPLY])
-            )
+            await expect(upgrades.deployProxy(Sale, [giniPrice, wrongStart, wrongEnd, usdc.target, SALE_TOTAL_SUPPLY]))
                 .to.be.revertedWithCustomError(sale, "InvalidPhaseParams")
                 .withArgs(wrongStart, wrongEnd);
 
@@ -99,28 +99,34 @@ describe("GiniTokenSale", function () {
 
             // Deploy and expect revert
             await expect(
-                ethers.deployContract("GiniTokenSale", [giniPrice, wrongStart2, wrongEnd2, usdc, SALE_TOTAL_SUPPLY])
+                upgrades.deployProxy(Sale, [giniPrice, wrongStart2, wrongEnd2, usdc.target, SALE_TOTAL_SUPPLY])
             )
-                .to.be.revertedWithCustomError(sale, "InvalidPhaseParams")
+                .to.be.revertedWithCustomError(Sale, "InvalidPhaseParams")
                 .withArgs(wrongStart2, wrongEnd2);
         });
 
         it("Should revert if purchase token address is zero", async () => {
+            const Sale = await ethers.getContractFactory("GiniTokenSale", deployer);
+
             await expect(
-                ethers.deployContract("GiniTokenSale", [
-                    giniPrice,
-                    saleStart,
-                    saleEnd,
-                    ethers.ZeroAddress,
-                    SALE_TOTAL_SUPPLY
-                ])
-            ).to.be.revertedWithCustomError(sale, "ZeroAddress");
+                upgrades.deployProxy(Sale, [giniPrice, saleStart, saleEnd, ethers.ZeroAddress, SALE_TOTAL_SUPPLY])
+            ).to.be.revertedWithCustomError(Sale, "ZeroAddress");
         });
 
         it("Should revert if total supply for sale is zero", async () => {
+            const Sale = await ethers.getContractFactory("GiniTokenSale", deployer);
+
             await expect(
-                ethers.deployContract("GiniTokenSale", [giniPrice, saleStart, saleEnd, usdc, 0])
-            ).to.be.revertedWithCustomError(sale, "InsufficientValue");
+                upgrades.deployProxy(Sale, [giniPrice, saleStart, saleEnd, usdc.target, 0])
+            ).to.be.revertedWithCustomError(Sale, "InsufficientValue");
+        });
+
+        it("Should revert when initialize again", async () => {
+            const Sale = await ethers.getContractFactory("GiniTokenSale", deployer);
+
+            await expect(
+                sale.initialize(giniPrice, saleStart, saleEnd, usdc.target, SALE_TOTAL_SUPPLY)
+            ).to.be.revertedWithCustomError(Sale, "InvalidInitialization");
         });
     });
 
@@ -300,6 +306,58 @@ describe("GiniTokenSale", function () {
             expect(await sale.getReceivedAmount(amount2)).to.eq(amount2 / 2n);
             expect(await sale.getReceivedAmount(amount3)).to.eq(amount3 / 2n);
             expect(await sale.getReceivedAmount(amount4)).to.eq(amount4 / 2n);
+        });
+
+        it("Should allow to get correct purchase amount (when 6 decimals in token)", async () => {
+            // Deploy token with 6 decimals
+            const usdt = await ethers.deployContract("USDT", [addDec(100_000)]);
+            await usdt.waitForDeployment();
+
+            // Check that token has 6 decimals
+            expect(await usdt.decimals()).to.eq(6);
+
+            // Sale phase preparation
+            const saleStart = (await time.latest()) + 100;
+            const saleEnd = saleStart + time.duration.days(2);
+
+            // Deploy token sale contract
+            const Sale = await ethers.getContractFactory("GiniTokenSale", deployer);
+            const sale2 = <GiniTokenSale>(
+                (<unknown>(
+                    await upgrades.deployProxy(Sale, [giniPrice, saleStart, saleEnd, usdt.target, SALE_TOTAL_SUPPLY])
+                ))
+            );
+            await sale2.waitForDeployment();
+
+            // Deploy GINI token
+            const gini = await ethers.deployContract(
+                "GiniToken",
+                [NAME, SYMBOL, TOTAL_SUPPLY, sale2, vestingContract],
+                deployer
+            );
+            await gini.waitForDeployment();
+
+            // Set Gini token
+            await sale2.setGiniToken(gini);
+
+            // Calculate received amount
+            const amount1 = addDec(34, 6);
+            const amount1Expected = addDec(34) / 2n;
+
+            const amount2 = addDec(17.5234, 6);
+            const amount2Expected = addDec(17.5234) / 2n;
+
+            const amount3 = addDec(786.4333, 6);
+            const amount3Expected = addDec(786.4333) / 2n;
+
+            const amount4 = addDec(344.86765, 6);
+            const amount4Expected = addDec(344.86765) / 2n;
+
+            // Check
+            expect(await sale2.getReceivedAmount(amount1)).to.eq(amount1Expected);
+            expect(await sale2.getReceivedAmount(amount2)).to.eq(amount2Expected);
+            expect(await sale2.getReceivedAmount(amount3)).to.eq(amount3Expected);
+            expect(await sale2.getReceivedAmount(amount4)).to.eq(amount4Expected);
         });
     });
 });
