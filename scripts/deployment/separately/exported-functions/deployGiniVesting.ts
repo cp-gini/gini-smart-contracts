@@ -1,5 +1,5 @@
 // This script contains the function for deployment and verification of the `contracts/PositiveEvenSetter.sol`.
-import hre from "hardhat";
+import hre, { upgrades } from "hardhat";
 
 import { GiniVesting } from "../../../../typechain-types";
 
@@ -17,7 +17,8 @@ async function deployGiniVesting(totalSupply: bigint): Promise<GiniVesting> {
     const [deployer] = await ethers.getSigners();
 
     // Deployment.
-    const giniVesting = await ethers.deployContract("GiniVesting", [totalSupply], deployer);
+    const GiniVesting = await ethers.getContractFactory("GiniVesting");
+    const giniVesting = <GiniVesting>(<unknown>await upgrades.deployProxy(GiniVesting, [totalSupply]));
     await giniVesting.waitForDeployment();
 
     console.log(`\`Gini Vesting\` is deployed to ${giniVesting.target}.`);
@@ -29,7 +30,7 @@ async function deployGiniVesting(totalSupply: bigint): Promise<GiniVesting> {
 
         await hre.run("verify:verify", {
             address: giniVesting.target,
-            constructorArguments: [totalSupply]
+            constructorArguments: []
         });
     }
 

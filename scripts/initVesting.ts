@@ -1,11 +1,9 @@
 // eslint-disable-next-line @typescript-eslint/unbound-method
-import { time } from "@nomicfoundation/hardhat-network-helpers";
 
 import hre from "hardhat";
 import { addDec } from "../test/helpers";
 
 const ethers = hre.ethers;
-const duration = time.duration;
 
 // Addresses
 const VESTING = "";
@@ -19,9 +17,9 @@ async function initVesting() {
 
     // Prepare data for the vesting
     const vestingID = 1; // ID of the vesting
-    const cliffStartTimestamp = (await time.latest()) + 100; // Cliff start timestamp of the vesting
-    const startTimestamp = cliffStartTimestamp + 1000; // Start timestamp of the vesting
-    const endTimestamp = startTimestamp + 1000; // End timestamp of the vesting
+    const cliffStartTimestamp = 1725918160; // Cliff start timestamp of the vesting
+    const startTimestamp = 1725919160; // Start timestamp of the vesting
+    const endTimestamp = 1725928160; // End timestamp of the vesting
     const beneficiaries = [admin.address];
     const amounts = [addDec(250)];
 

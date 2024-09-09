@@ -12,9 +12,9 @@ async function main() {
     // Deployment and verification of the `contracts/GiniTokenSale.sol`.
     // Data for the GiniTokenSale
     const giniPrice = addDec(0.5); // equal to 0.5 stable coin
-    const saleStart = (await time.latest()) + 1000; // Means that the sale will start after 1000 seconds of running the script
-    const saleEnd = saleStart + time.duration.years(1); // Means that the sale will end after 1 year
-    const purchaseToken = ""; // The address of the stable coin
+    const saleStart = 1725917296; // The timestamp when the sale will start
+    const saleEnd = 1725918296; // The timestamp when the sale will end
+    const purchaseToken = "0x134bd58282Fe7c8EbBD6dEd8b30e0E02861F5c95"; // The address of the stable coin
     const totalSupply = addDec(30_000); // Total supply for the sale
 
     const giniTokenSale = await deployGiniTokenSale(giniPrice, saleStart, saleEnd, purchaseToken, totalSupply);
