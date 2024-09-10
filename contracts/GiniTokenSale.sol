@@ -36,7 +36,15 @@ contract GiniTokenSale is Initializable, AccessControlUpgradeable {
     /// @notice Stores the start and end timestamps of the sale.
     SalePhase public salePhase;
 
-    /// @notice Stores the price of the Gini token.
+    /**
+     * @notice Stores the price of the Gini token.
+     *
+     * @dev Price must be set with 18 decimals.
+     * @dev The amount of Gini tokens that can be purchased with 1 purchase token.
+     *
+     * @dev Example: price = 0.5 + 18 decimals => For 1 USDT you will receive 0.5 Gini tokens.
+     * @dev If price = 2 + 18 decimals => For 1 USDT you will receive 2 Gini tokens.
+     */
     uint256 public giniPrice;
 
     /// @notice Stores the maximum amount of Gini tokens that can be purchased per user.
@@ -47,6 +55,9 @@ contract GiniTokenSale is Initializable, AccessControlUpgradeable {
 
     /// @notice Stores the total remaining amount of Gini tokens that can be purchased.
     uint256 public totalSupply;
+
+    /// @notice Stores the total raised amount of the purchase token.
+    uint256 public totalRaised;
 
     /// @notice Stores the purchase token.
     ERC20 public purchaseToken;
@@ -83,6 +94,18 @@ contract GiniTokenSale is Initializable, AccessControlUpgradeable {
 
     /// @dev Revert if total supply is reached.
     error TotalSupplyReached();
+
+    /// @dev Revert if purchase token is not set.
+    error TokenNotSet();
+
+    /// @dev Revert if GINI token is already set.
+    error TokenAlreadySet();
+
+    /// @dev Revert when rescuing GINI tokens.
+    error NotAllowedToken(address token);
+
+    /// @dev Revert when sale has already ended.
+    error SaleAlreadyEnded();
 
     // _______________ Events _______________
 
@@ -147,21 +170,18 @@ contract GiniTokenSale is Initializable, AccessControlUpgradeable {
      * @param _saleStart - the start timestamp of the sale
      * @param _saleEnd - the end timestamp of the sale
      * @param _purchaseToken - the address of the purchase token
-     * @param _totalSupply - the total remaining amount of Gini tokens that can be purchased
      */
     function initialize(
         uint256 _giniPrice,
         uint256 _saleStart,
         uint256 _saleEnd,
-        address _purchaseToken,
-        uint256 _totalSupply
+        address _purchaseToken
     ) public initializer {
         __AccessControl_init();
 
         _setGiniPrice(_giniPrice);
         _setSalePhase(_saleStart, _saleEnd);
         _setPurchaseToken(_purchaseToken);
-        _setTotalSupply(_totalSupply);
 
         _grantRole(DEFAULT_ADMIN_ROLE, msg.sender);
     }
@@ -175,6 +195,7 @@ contract GiniTokenSale is Initializable, AccessControlUpgradeable {
      */
     function purchase(uint256 _value) external {
         if (_value == 0) revert CannotBuyZeroTokens();
+        if (address(purchaseToken) == address(0)) revert TokenNotSet();
 
         if (salePhase.start > block.timestamp || salePhase.end < block.timestamp) revert OnlyWhileSalePhase();
 
@@ -185,6 +206,7 @@ contract GiniTokenSale is Initializable, AccessControlUpgradeable {
 
         purchaseAmount[buyer] += amountToReceive;
         totalSupply -= amountToReceive;
+        totalRaised += _value;
 
         emit Purchase(buyer, amountToReceive);
 
@@ -193,16 +215,33 @@ contract GiniTokenSale is Initializable, AccessControlUpgradeable {
     }
 
     /**
-     * @notice Allows admin to withdraw the remaining ERC20 or native token.
+     * @notice Allows admin to withdraw the remaining GINI tokens.
      *
-     * @param _token - the address of the token
-     *               if token is zero address, it will withdraw native token
-     *               else it will withdraw the given token
      * @param _recipient - the address of the recipient
      */
-    function withdrawRemainingTokens(address _token, address _recipient) external payable onlyRole(DEFAULT_ADMIN_ROLE) {
+    function withdrawRemainingTokens(address _recipient) external onlyRole(DEFAULT_ADMIN_ROLE) {
         if (_recipient == address(0)) revert ZeroAddress();
         if (salePhase.start < block.timestamp && block.timestamp < salePhase.end) revert WithdrawingDuringSale();
+
+        uint256 value;
+
+        value = gini.balanceOf(address(this));
+        gini.safeTransfer(_recipient, value);
+
+        emit Withdraw(address(gini), _recipient, value);
+    }
+
+    /**
+     * @notice Allows admin to withdraw the remaining ERC20 tokens or native token.
+     *
+     * @param _recipient - the address of the recipient
+     * @param _token - the address of the token
+     *
+     * @dev Revert if the token is the Gini token.
+     */
+    function rescueTokens(address _token, address _recipient) external payable onlyRole(DEFAULT_ADMIN_ROLE) {
+        if (_recipient == address(0)) revert ZeroAddress();
+        if (_token == address(gini)) revert NotAllowedToken(_token);
 
         uint256 value;
 
@@ -227,11 +266,30 @@ contract GiniTokenSale is Initializable, AccessControlUpgradeable {
      */
     function setGiniToken(address _token) external onlyRole(DEFAULT_ADMIN_ROLE) {
         if (_token == address(0)) revert ZeroAddress();
-        if (salePhase.start < block.timestamp && salePhase.end > block.timestamp) revert NotAllowedDuringSale();
+        if (address(gini) != address(0)) revert TokenAlreadySet();
 
         gini = ERC20(_token);
 
+        // Set total supply
+        _setTotalSupply(gini.balanceOf(address(this)));
+
         emit SetGiniToken(_token);
+    }
+
+    /**
+     * @notice Allows admin to prolong the sale.
+     *
+     * @param _end - the new end timestamp of the sale
+     *
+     * @dev Revert if the sale has already ended or the new end timestamp is less than the current end timestamp.
+     */
+    function prolongSale(uint256 _end) external onlyRole(DEFAULT_ADMIN_ROLE) {
+        if (salePhase.end < block.timestamp) revert SaleAlreadyEnded();
+        if (salePhase.end > _end) revert InvalidPhaseParams(salePhase.end, _end);
+
+        salePhase.end = _end;
+
+        emit SalePhaseSet(salePhase.start, _end);
     }
 
     /**
