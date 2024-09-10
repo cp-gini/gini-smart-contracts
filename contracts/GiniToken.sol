@@ -2,10 +2,9 @@
 pragma solidity 0.8.26;
 
 import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
-import "@openzeppelin/contracts/token/ERC20/extensions/ERC20Permit.sol";
 import "@openzeppelin/contracts/access/AccessControl.sol";
 
-contract GiniToken is ERC20, AccessControl, ERC20Permit {
+contract GiniToken is ERC20, AccessControl {
     // _______________ Storage _______________
 
     /**
@@ -14,6 +13,14 @@ contract GiniToken is ERC20, AccessControl, ERC20Permit {
      * An address => is denied for all token transfers?
      */
     mapping(address => bool) public denylist;
+
+    // _______________ Constants _______________
+
+    /// @notice The total supply for the token sale.
+    uint256 public constant SALE_SUPPLY = 300_000_000e18;
+
+    /// @notice The total supply of the token.
+    uint256 public constant TOTAL_SUPPLY = 2_000_000_000e18;
 
     // _______________ Errors _______________
     /**
@@ -63,27 +70,17 @@ contract GiniToken is ERC20, AccessControl, ERC20Permit {
 
     /**
      *
-     * @param _name The name of the token
-     * @param _symbol The symbol of the token
-     * @param _totalSupply The total supply of the token
      * @param _publicSaleContract The address of the public sale contract
      * @param _vestingContract The address of the vesting contract
      */
-    constructor(
-        string memory _name,
-        string memory _symbol,
-        uint _totalSupply,
-        address _publicSaleContract,
-        address _vestingContract
-    ) ERC20(_name, _symbol) ERC20Permit(_name) {
+    constructor(address _publicSaleContract, address _vestingContract) ERC20("Gini", "GINI") {
         if (_publicSaleContract == address(0) || _vestingContract == address(0)) {
             revert ZeroAddress();
         }
 
-        uint saleSupply = (_totalSupply * 6) / 100;
-        uint vestingSupply = _totalSupply - saleSupply;
+        uint256 vestingSupply = TOTAL_SUPPLY - SALE_SUPPLY;
 
-        _mint(_publicSaleContract, saleSupply);
+        _mint(_publicSaleContract, SALE_SUPPLY);
         _mint(_vestingContract, vestingSupply);
 
         _grantRole(DEFAULT_ADMIN_ROLE, msg.sender);
