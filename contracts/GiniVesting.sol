@@ -39,6 +39,7 @@ contract GiniVesting is AccessControlUpgradeable, ReentrancyGuardUpgradeable {
      * 4. Initial unlock percentage defines how much tokens will be available from the start of the vesting. (10000 = 100%)
      */
     struct VestingPeriod {
+        uint256 totalSupply;
         uint256 cliffStartTimestamp;
         uint256 startTimestamp;
         uint256 endTimestamp;
@@ -51,11 +52,15 @@ contract GiniVesting is AccessControlUpgradeable, ReentrancyGuardUpgradeable {
      * 1. Team - Vesting for the team.
      * 2. Foundation - Vesting for the foundation.
      * 3. Reserve - Vesting for the reserve.
+     * 4. Airdrop - Vesting for the airdrop.
+     * 5. Seed - Vesting for the seed and private investors.
      */
     enum VestingType {
         Team,
         Foundation,
-        Reserve
+        Reserve,
+        Airdrop,
+        Seed
     }
 
     // _______________ Storage _______________
@@ -67,16 +72,16 @@ contract GiniVesting is AccessControlUpgradeable, ReentrancyGuardUpgradeable {
     /// @notice Vesting Type => Vesting Period.
     mapping(VestingType => VestingPeriod) public vestingPeriods;
 
-    /// @notice Vesting ID => The total allocations for all accounts.
+    /// @notice Vesting Type => The total allocations for all accounts.
     mapping(VestingType => uint256) public commonAllocations;
 
-    /// @notice Vesting ID => The total claims for all accounts.
+    /// @notice Vesting Type => The total claims for all accounts.
     mapping(VestingType => uint256) public totalClaims;
 
-    /// @notice User => All vesting IDs of the user.
+    /// @notice User => All vesting IDS of the user.
     mapping(address => uint256[]) public userVestings;
 
-    /// @notice Vesting ID => Beneficiary => Beneficiary info.
+    /// @notice Vesting Type => Beneficiary => Beneficiary info.
     mapping(VestingType => mapping(address => Beneficiary)) public beneficiaries;
 
     /// @notice The vesting token.
@@ -114,8 +119,8 @@ contract GiniVesting is AccessControlUpgradeable, ReentrancyGuardUpgradeable {
     /// @dev Revert if total supply is zero.
     error CannotBeZero();
 
-    /// @dev Revert if total supply is reached.
-    error TotalSupplyReached();
+    /// @dev Revert if total supply of vesting is reached.
+    error TotalSupplyReached(VestingType vestingID);
 
     /// @dev Revert if vesting token rescue failed.
     error VestingTokenRescue(address token);
@@ -138,6 +143,10 @@ contract GiniVesting is AccessControlUpgradeable, ReentrancyGuardUpgradeable {
 
     error OnlyBeforeVestingCliff();
 
+    error TokenAlreadySet();
+
+    error OnlyForAirdrop(uint256 vestingID);
+
     // _______________ Events _______________
 
     /**
@@ -155,7 +164,8 @@ contract GiniVesting is AccessControlUpgradeable, ReentrancyGuardUpgradeable {
         VestingType indexed vestingID,
         uint256 cliffStartTimestamp,
         uint256 startTimestamp,
-        uint256 endTimestamp
+        uint256 endTimestamp,
+        uint256 totalSupply
     );
 
     /**
@@ -180,61 +190,26 @@ contract GiniVesting is AccessControlUpgradeable, ReentrancyGuardUpgradeable {
         _;
     }
 
-    /**
-     *
-     * @param _totalSupply The total amount of tokens that can be allocated.
-     */
-    function initialize(uint256 _totalSupply) public initializer {
+    function initialize(
+        uint256 _startTimestamp,
+        uint256[5] calldata _cliffDurations,
+        uint256[5] calldata _endTimestamps,
+        uint256[5] calldata _totalSupplies
+    ) public initializer {
         __AccessControl_init();
         __ReentrancyGuard_init();
 
-        if (_totalSupply == 0) revert CannotBeZero();
-        totalSupply = _totalSupply;
-
-        _grantRole(DEFAULT_ADMIN_ROLE, msg.sender);
-    }
-
-    /**
-     * @dev Initialize vesting.
-     *
-     * @param _vestingID   ID of the vesting.
-     * @param _cliffStartTimestamp   Start timestamp of the cliff period.
-     * @param _startTimestamp   Start timestamp of the vesting.
-     * @param _endTimestamp   End timestamp of the vesting.
-     * @param _beneficiaries   Array of the beneficiaries addresses.
-     * @param _amounts   Array of the amounts, each amount corresponds to the beneficiary by index.
-     *
-     * Emits a VestingInitialized event.
-     */
-    function initVesting(
-        VestingType _vestingID,
-        uint256 _cliffStartTimestamp,
-        uint256 _startTimestamp,
-        uint256 _endTimestamp,
-        address[] calldata _beneficiaries,
-        uint256[] calldata _amounts
-    ) external onlyRole(DEFAULT_ADMIN_ROLE) {
-        uint256 length = _beneficiaries.length;
-        uint256 totalAllocations = 0;
-
-        if (_beneficiaries.length == 0) revert NoBeneficiaries();
-        if (_beneficiaries.length != _amounts.length)
-            revert ArraysLengthMismatch(_beneficiaries.length, _amounts.length);
-
-        _validateNSetVesting(_vestingID, _cliffStartTimestamp, _startTimestamp, _endTimestamp);
-
-        // fill beneficiaries
-        for (uint256 i = 0; i < length; i++) {
-            _addBeneficiary(_vestingID, _beneficiaries[i], _amounts[i]);
-            totalAllocations += _amounts[i];
+        for (uint8 i = 0; i < 5; i++) {
+            _validateNSetVesting(
+                VestingType(i),
+                _cliffDurations[i],
+                _startTimestamp,
+                _endTimestamps[i],
+                _totalSupplies[i]
+            );
         }
 
-        if (totalSupply < totalAllocations) revert TotalSupplyReached();
-
-        totalSupply -= totalAllocations;
-        commonAllocations[_vestingID] = totalAllocations;
-
-        emit VestingInitialized(_vestingID, _cliffStartTimestamp, _startTimestamp, _endTimestamp);
+        _grantRole(DEFAULT_ADMIN_ROLE, msg.sender);
     }
 
     function addBeneficiaries(
@@ -242,7 +217,7 @@ contract GiniVesting is AccessControlUpgradeable, ReentrancyGuardUpgradeable {
         address[] calldata _beneficiary,
         uint256[] calldata _amount
     ) external onlyRole(DEFAULT_ADMIN_ROLE) {
-        VestingPeriod memory vesting = vestingPeriods[_vestingID];
+        VestingPeriod storage vesting = vestingPeriods[_vestingID];
         uint256 length = _beneficiary.length;
         uint256 totalAllocations = 0;
 
@@ -259,10 +234,71 @@ contract GiniVesting is AccessControlUpgradeable, ReentrancyGuardUpgradeable {
             totalAllocations += _amount[i];
         }
 
-        if (totalSupply < totalAllocations) revert TotalSupplyReached();
+        if (vesting.totalSupply < totalAllocations) revert TotalSupplyReached(_vestingID);
 
-        totalSupply -= totalAllocations;
-        commonAllocations[_vestingID] += totalAllocations;
+        vesting.totalSupply -= totalAllocations;
+
+        emit BeneficiariesAdded(_vestingID);
+    }
+
+    function addAirdrop(
+        VestingType _vestingID,
+        address[] calldata _beneficiary,
+        uint256[] calldata _amount
+    ) external onlyRole(DEFAULT_ADMIN_ROLE) {
+        if (uint256(_vestingID) != 3) revert OnlyForAirdrop(uint256(_vestingID));
+
+        VestingPeriod storage vesting = vestingPeriods[_vestingID];
+        uint256 length = _beneficiary.length;
+        uint256 totalAllocations = 0;
+
+        // Check that vesting already exist and cliff period is not started yet
+        if (vesting.startTimestamp == 0) revert VestingNotInitialized(_vestingID);
+        if (vesting.cliffStartTimestamp < block.timestamp) revert OnlyBeforeVestingCliff();
+
+        // Check that arrays are not empty and have the same length
+        if (_beneficiary.length == 0) revert NoBeneficiaries();
+        if (_beneficiary.length != _amount.length) revert ArraysLengthMismatch(_beneficiary.length, _amount.length);
+
+        for (uint256 i = 0; i < length; i++) {
+            _addBeneficiary(_vestingID, _beneficiary[i], _amount[i]);
+            totalAllocations += _amount[i];
+        }
+
+        if (vesting.totalSupply < totalAllocations) revert TotalSupplyReached(_vestingID);
+
+        vesting.totalSupply -= totalAllocations;
+
+        emit BeneficiariesAdded(_vestingID);
+    }
+
+    function addScheduled(
+        VestingType _vestingID,
+        address[] calldata _beneficiary,
+        uint256[] calldata _amount
+    ) external onlyRole(DEFAULT_ADMIN_ROLE) {
+        if (uint256(_vestingID) != 4) revert OnlyForAirdrop(uint256(_vestingID));
+
+        VestingPeriod storage vesting = vestingPeriods[_vestingID];
+        uint256 length = _beneficiary.length;
+        uint256 totalAllocations = 0;
+
+        // Check that vesting already exist and cliff period is not started yet
+        if (vesting.startTimestamp == 0) revert VestingNotInitialized(_vestingID);
+        if (vesting.cliffStartTimestamp < block.timestamp) revert OnlyBeforeVestingCliff();
+
+        // Check that arrays are not empty and have the same length
+        if (_beneficiary.length == 0) revert NoBeneficiaries();
+        if (_beneficiary.length != _amount.length) revert ArraysLengthMismatch(_beneficiary.length, _amount.length);
+
+        for (uint256 i = 0; i < length; i++) {
+            _addBeneficiary(_vestingID, _beneficiary[i], _amount[i]);
+            totalAllocations += _amount[i];
+        }
+
+        if (vesting.totalSupply < totalAllocations) revert TotalSupplyReached(_vestingID);
+
+        vesting.totalSupply -= totalAllocations;
 
         emit BeneficiariesAdded(_vestingID);
     }
@@ -358,6 +394,7 @@ contract GiniVesting is AccessControlUpgradeable, ReentrancyGuardUpgradeable {
      * @param _token   Address of the token.
      */
     function setGiniToken(address _token) external onlyRole(DEFAULT_ADMIN_ROLE) notZeroAddress(_token) {
+        if (address(gini) != address(0)) revert TokenAlreadySet();
         gini = IERC20(_token);
 
         emit SetGiniToken(_token);
@@ -392,7 +429,8 @@ contract GiniVesting is AccessControlUpgradeable, ReentrancyGuardUpgradeable {
             block.timestamp,
             beneficiary.totalAllocations,
             vesting.startTimestamp,
-            vesting.duration
+            vesting.duration,
+            _vestingID
         );
 
         claimAmount = claimableAmount - alreadyClaimed;
@@ -552,33 +590,45 @@ contract GiniVesting is AccessControlUpgradeable, ReentrancyGuardUpgradeable {
     }
 
     /**
+     * @dev Validate and set vesting period.
      *
-     * @param _vestingID The ID of the vesting.
-     * @param _cliffStartTimestamp The timestamp of the cliff period.
-     * @param _startTimestamp The timestamp of the vesting start.
-     * @param _endTimestamp The timestamp of the vesting end.
+     * @param _vestingID   ID of the vesting.
+     * @param _cliffDuration   Duration of the cliff period.
+     * @param _startTimestamp   Start timestamp of the vesting.
+     * @param _endTimestamp   End timestamp of the vesting.
+     * @param _totalSupply   Total supply of the vesting token.
      */
     function _validateNSetVesting(
         VestingType _vestingID,
-        uint256 _cliffStartTimestamp,
+        uint256 _cliffDuration,
         uint256 _startTimestamp,
-        uint256 _endTimestamp
+        uint256 _endTimestamp,
+        uint256 _totalSupply
     ) internal {
         VestingPeriod memory vestingInfo = vestingPeriods[_vestingID];
         if (vestingInfo.cliffStartTimestamp != 0) revert AlreadyInitialized();
 
-        if (
-            _cliffStartTimestamp < block.timestamp ||
-            _cliffStartTimestamp > _startTimestamp ||
-            _startTimestamp > _endTimestamp
-        ) revert InvalidVestingParams(_cliffStartTimestamp, _startTimestamp, _endTimestamp);
+        if (_startTimestamp > _endTimestamp)
+            revert InvalidVestingParams(_startTimestamp, _startTimestamp + _cliffDuration, _endTimestamp);
 
         vestingPeriods[_vestingID] = VestingPeriod({
-            cliffStartTimestamp: _cliffStartTimestamp,
-            startTimestamp: _startTimestamp,
+            totalSupply: _totalSupply,
+            cliffStartTimestamp: _startTimestamp,
+            startTimestamp: _startTimestamp + _cliffDuration,
             endTimestamp: _endTimestamp,
-            duration: _endTimestamp - _startTimestamp
+            duration: _endTimestamp - (_startTimestamp + _cliffDuration)
         });
+
+        totalSupply += _totalSupply;
+        commonAllocations[_vestingID] = _totalSupply;
+
+        emit VestingInitialized(
+            _vestingID,
+            _startTimestamp,
+            _startTimestamp + _cliffDuration,
+            _endTimestamp,
+            _totalSupply
+        );
     }
 
     /**
@@ -595,28 +645,28 @@ contract GiniVesting is AccessControlUpgradeable, ReentrancyGuardUpgradeable {
         uint256 _timestamp,
         uint256 _totalAllocations,
         uint256 _startTimestamp,
-        uint256 _duration
+        uint256 _duration,
+        VestingType _vestingID
     ) internal pure returns (uint256 claimableAmount) {
-        if (_timestamp < _startTimestamp) return 0;
+        if (_timestamp < _startTimestamp && _vestingID != VestingType.Airdrop) return 0;
 
-        uint256 elapsedMonths = _secondsToMonth(_timestamp - _startTimestamp);
+        uint256 elapsedMonths;
+        if (_vestingID == VestingType.Airdrop) {
+            elapsedMonths = ((_timestamp - _startTimestamp) / CLAIM_INTERVAL) + 1;
+        } else {
+            elapsedMonths = (_timestamp - _startTimestamp) / CLAIM_INTERVAL;
+        }
 
         if (elapsedMonths == 0) return 0;
 
         if (_timestamp > _startTimestamp + _duration) {
             return _totalAllocations;
+        } else if (_vestingID == VestingType.Airdrop) {
+            uint256 amountPerMonth = _totalAllocations / ((_duration + CLAIM_INTERVAL) / CLAIM_INTERVAL);
+            claimableAmount = amountPerMonth * elapsedMonths;
         } else {
             uint256 amountPerMonth = _totalAllocations / (_duration / CLAIM_INTERVAL);
             claimableAmount = amountPerMonth * elapsedMonths;
         }
-    }
-
-    /**
-     * @dev Convert seconds to months.
-     *
-     * @param _seconds The number of seconds.
-     */
-    function _secondsToMonth(uint256 _seconds) internal pure returns (uint256) {
-        return _seconds / 60 / 60 / 24 / 30;
     }
 }
