@@ -18,23 +18,12 @@ describe("GiniToken", function () {
 
     let gini: GiniToken;
 
-    // Constants
-    const name = "Gini",
-        symbol = "GINI",
-        totalSupply = addDec(1_000_000);
-
     before(async () => {
         // Getting of signers
         [deployer, publicSaleContract, vestingContract] = await ethers.getSigners();
 
         // Deployment
-        gini = await ethers.deployContract("GiniToken", [
-            name,
-            symbol,
-            totalSupply,
-            publicSaleContract.address,
-            vestingContract.address
-        ]);
+        gini = await ethers.deployContract("GiniToken", [publicSaleContract.address, vestingContract.address]);
         await gini.waitForDeployment();
 
         snapshotA = await takeSnapshot();
@@ -44,27 +33,20 @@ describe("GiniToken", function () {
 
     describe("# Constructor", function () {
         it("Should set all values and mint tokens correctly", async () => {
-            expect(await gini.name()).to.equal(name);
-            expect(await gini.symbol()).to.equal(symbol);
-            expect(await gini.totalSupply()).to.equal(totalSupply);
-            expect(await gini.balanceOf(publicSaleContract.address)).to.equal((totalSupply * 6n) / 100n);
-            expect(await gini.balanceOf(vestingContract.address)).to.equal(totalSupply - (totalSupply * 6n) / 100n);
-            expect(await gini.hasRole(await gini.DEFAULT_ADMIN_ROLE(), deployer.address)).to.equal(true);
+            expect(await gini.SALE_SUPPLY()).to.equal(addDec(300_000_000));
+            expect(await gini.TOTAL_SUPPLY()).to.equal(addDec(2_000_000_000));
+            expect(await gini.balanceOf(publicSaleContract.address)).to.equal(addDec(300_000_000));
+            expect(await gini.balanceOf(vestingContract.address)).to.equal(addDec(1_700_000_000));
+            expect(await gini.hasRole(await gini.DEFAULT_ADMIN_ROLE(), deployer.address)).to.be.true;
         });
 
         it("Should revert if public sale contract or vesting contract address is zero during deployment", async () => {
             await expect(
-                ethers.deployContract("GiniToken", [name, symbol, totalSupply, ethers.ZeroAddress, ethers.ZeroAddress])
+                ethers.deployContract("GiniToken", [ethers.ZeroAddress, ethers.ZeroAddress])
             ).to.be.revertedWithCustomError(gini, "ZeroAddress");
 
             await expect(
-                ethers.deployContract("GiniToken", [
-                    name,
-                    symbol,
-                    totalSupply,
-                    publicSaleContract.address,
-                    ethers.ZeroAddress
-                ])
+                ethers.deployContract("GiniToken", [publicSaleContract.address, ethers.ZeroAddress])
             ).to.be.revertedWithCustomError(gini, "ZeroAddress");
         });
     });
