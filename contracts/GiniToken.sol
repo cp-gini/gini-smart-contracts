@@ -4,6 +4,16 @@ pragma solidity 0.8.26;
 import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 import "@openzeppelin/contracts/access/AccessControl.sol";
 
+/**
+ * @title GiniToken
+ * @dev A contract representing the GiniToken ERC20 token with access control.
+ *
+ * The contract is created with the following parameters:
+ * - The name of the token is "Gini".
+ * - The symbol of the token is "GINI".
+ * - The total supply of the token is 2,000,000,000 GINI.
+ * - The total supply for the public sale is 300,000,000 GINI.
+ */
 contract GiniToken is ERC20, AccessControl {
     // _______________ Storage _______________
 
@@ -17,10 +27,10 @@ contract GiniToken is ERC20, AccessControl {
     // _______________ Constants _______________
 
     /// @notice The total supply for the token sale.
-    uint256 public constant SALE_SUPPLY = 300_000_000e18;
+    uint256 public constant SALE_SUPPLY = 300_000_000 * 1e18;
 
     /// @notice The total supply of the token.
-    uint256 public constant TOTAL_SUPPLY = 2_000_000_000e18;
+    uint256 public constant TOTAL_SUPPLY = 2_000_000_000 * 1e18;
 
     // _______________ Errors _______________
     /**
