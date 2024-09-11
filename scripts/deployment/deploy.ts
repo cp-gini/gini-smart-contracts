@@ -1,37 +1,29 @@
 // This is a script for deployment and automatically verification of all the contracts (`contracts/`).
 import hre from "hardhat";
-import { deployGiniTokenSale } from "./separately/exported-functions/deployGiniTokenSale";
 import { addDec } from "../../test/helpers";
-import { time } from "@nomicfoundation/hardhat-toolbox/network-helpers";
+import { deployGiniTokenSale } from "./separately/exported-functions/deployGiniTokenSale";
 import { deployGiniVesting } from "./separately/exported-functions/deployGiniVesting";
 import { deployGiniToken } from "./separately/exported-functions/deployGiniToken";
 
-const ethers = hre.ethers;
+import settings from "../../settings.json";
 
 async function main() {
     // Deployment and verification of the `contracts/GiniTokenSale.sol`.
     // Data for the GiniTokenSale
-    const giniPrice = addDec(0.5); // equal to 0.5 stable coin
-    const saleStart = 1725917296; // The timestamp when the sale will start
-    const saleEnd = 1725918296; // The timestamp when the sale will end
-    const purchaseToken = "0x134bd58282Fe7c8EbBD6dEd8b30e0E02861F5c95"; // The address of the stable coin
-    const totalSupply = addDec(30_000); // Total supply for the sale
+    const giniPrice = addDec(settings.giniPricePerUSDT); // If price is 0.5, then for 1 USDT you will get 0.5 Gini
+    const saleStart = settings.saleStartTimestamp;
+    const saleEnd = settings.saleEndTimestamp;
+    const purchaseToken = settings.addresses.USDT; // The address of the stable coin that will be used for purchasing Gini
 
-    const giniTokenSale = await deployGiniTokenSale(giniPrice, saleStart, saleEnd, purchaseToken, totalSupply);
+    const giniTokenSale = await deployGiniTokenSale(giniPrice, saleStart, saleEnd, purchaseToken);
 
     // Deployment and verification of the `contracts/GiniVesting.sol`.
-    const totalSupplyForVesting = addDec(10_000); // The total supply for the all vestings
-    const giniVesting = await deployGiniVesting(totalSupplyForVesting);
+    // Data for the GiniVesting
+    const startTimestamp = settings.vestingStartTimestamp; // The timestamp when the vestings will start
+    const giniVesting = await deployGiniVesting(startTimestamp);
 
     // Deployment and verification of the `contracts/GiniToken.sol`.
-    // Data for the GiniToken
-    const name = "Gini"; // The name of the token
-    const symbol = "GINI"; // The symbol of the token
-    const tokenTotalSupply = addDec(100_000_000); // The total supply of the token
-    const tokenSaleContract = giniTokenSale.target.toString(); // The address of the token sale contract
-    const tokenVestingContract = giniVesting.target.toString(); // The address of the token vesting contract
-
-    const gini = await deployGiniToken(name, symbol, tokenTotalSupply, tokenSaleContract, tokenVestingContract);
+    const gini = await deployGiniToken(giniTokenSale.target.toString(), giniTokenSale.target.toString());
 
     // Set the Gini token on the token sale contract
     await giniTokenSale.setGiniToken(gini);

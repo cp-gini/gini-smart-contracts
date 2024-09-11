@@ -1,10 +1,10 @@
 import { deployGiniVesting } from "./exported-functions/deployGiniVesting";
-import { addDec } from "../../../test/helpers";
+import settings from "../../../settings.json";
 
 async function main() {
-    const totalSupply = addDec(10_000); // The total supply for the all vestings
+    const startTimestamp = settings.vestingStartTimestamp; // The timestamp when the vestings will start
 
-    await deployGiniVesting(totalSupply);
+    await deployGiniVesting(startTimestamp);
 }
 
 // This pattern is recommended to be able to use async/await everywhere and properly handle errors.

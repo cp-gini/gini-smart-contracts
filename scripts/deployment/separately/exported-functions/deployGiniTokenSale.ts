@@ -10,8 +10,7 @@ async function deployGiniTokenSale(
     giniPrice: bigint,
     saleStart: number,
     saleEnd: number,
-    purchaseToken: string,
-    saleTotalSupply: bigint
+    purchaseToken: string
 ): Promise<GiniTokenSale> {
     /*
      * Hardhat always runs the compile task when running scripts with its command line interface.
@@ -24,15 +23,13 @@ async function deployGiniTokenSale(
     const [deployer] = await ethers.getSigners();
 
     // Deployment.
-    const GiniTokenSale = await ethers.getContractFactory("GiniTokenSale");
+    const GiniTokenSale = await ethers.getContractFactory("GiniTokenSale", deployer);
     const giniTokenSale = <GiniTokenSale>(
-        (<unknown>(
-            await upgrades.deployProxy(GiniTokenSale, [giniPrice, saleStart, saleEnd, purchaseToken, saleTotalSupply])
-        ))
+        (<unknown>await upgrades.deployProxy(GiniTokenSale, [giniPrice, saleStart, saleEnd, purchaseToken]))
     );
     await giniTokenSale.waitForDeployment();
 
-    console.log(`\`Gini Token Sale\` is deployed to ${giniTokenSale.target}.`);
+    console.log(`\`Gini Token Sale\` is deployed to ${giniTokenSale.target}`);
 
     // Verification of the deployed contract.
     if (hre.network.name !== "hardhat" && hre.network.name !== "localhost") {

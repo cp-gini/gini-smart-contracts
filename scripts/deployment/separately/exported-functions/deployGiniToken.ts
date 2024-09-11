@@ -5,13 +5,7 @@ import { GiniToken } from "../../../../typechain-types";
 
 const ethers = hre.ethers;
 
-async function deployGiniToken(
-    name: string,
-    symbol: string,
-    totalSupply: bigint,
-    tokenSale: string,
-    tokenVesting: string
-): Promise<GiniToken> {
+async function deployGiniToken(tokenSale: string, tokenVesting: string): Promise<GiniToken> {
     /*
      * Hardhat always runs the compile task when running scripts with its command line interface.
      *
@@ -23,14 +17,10 @@ async function deployGiniToken(
     const [deployer] = await ethers.getSigners();
 
     // Deployment.
-    const gini = await ethers.deployContract(
-        "GiniToken",
-        [name, symbol, totalSupply, tokenSale, tokenVesting],
-        deployer
-    );
+    const gini = await ethers.deployContract("GiniToken", [tokenSale, tokenVesting], deployer);
     await gini.waitForDeployment();
 
-    console.log(`\`Gini Token \` is deployed to ${gini.target}.`);
+    console.log(`\`Gini Token \` is deployed to ${gini.target}`);
 
     // Verification of the deployed contract.
     if (hre.network.name !== "hardhat" && hre.network.name !== "localhost") {
@@ -39,7 +29,7 @@ async function deployGiniToken(
 
         await hre.run("verify:verify", {
             address: gini.target,
-            constructorArguments: [name, symbol, totalSupply, tokenSale, tokenVesting]
+            constructorArguments: [tokenSale, tokenVesting]
         });
     }
 

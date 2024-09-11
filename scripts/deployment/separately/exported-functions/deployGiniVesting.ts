@@ -5,7 +5,7 @@ import { GiniVesting } from "../../../../typechain-types";
 
 const ethers = hre.ethers;
 
-async function deployGiniVesting(totalSupply: bigint): Promise<GiniVesting> {
+async function deployGiniVesting(startTimestamp: number): Promise<GiniVesting> {
     /*
      * Hardhat always runs the compile task when running scripts with its command line interface.
      *
@@ -18,10 +18,10 @@ async function deployGiniVesting(totalSupply: bigint): Promise<GiniVesting> {
 
     // Deployment.
     const GiniVesting = await ethers.getContractFactory("GiniVesting");
-    const giniVesting = <GiniVesting>(<unknown>await upgrades.deployProxy(GiniVesting, [totalSupply]));
+    const giniVesting = <GiniVesting>(<unknown>await upgrades.deployProxy(GiniVesting, [startTimestamp]));
     await giniVesting.waitForDeployment();
 
-    console.log(`\`Gini Vesting\` is deployed to ${giniVesting.target}.`);
+    console.log(`\`Gini Vesting\` is deployed to ${giniVesting.target}`);
 
     // Verification of the deployed contract.
     if (hre.network.name !== "hardhat" && hre.network.name !== "localhost") {
