@@ -1,0 +1,12 @@
+{
+    "addresses": {
+        "GiniToken": "",
+        "GiniTokenSale": "",
+        "GiniVesting": "",
+        "USDT": "0xdAC17F958D2ee523a2206206994597C13D831ec7" // USDT address on Ethereum mainnet
+    },
+    "vestingStartTimestamp": 1727136000, // Tuesday, September 24, 2024 12:00:00 AM (GMT)
+    "giniPricePerUSDT": 1,
+    "saleStartTimestamp": 0,
+    "saleEndTimestamp": 0
+}
