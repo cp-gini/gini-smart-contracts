@@ -192,7 +192,7 @@ contract GiniTokenSale is Initializable, AccessControlUpgradeable {
      */
     function purchase(uint256 _value) external {
         if (_value == 0) revert CannotBuyZeroTokens();
-        if (address(purchaseToken) == address(0)) revert TokenNotSet();
+        if (address(gini) == address(0)) revert TokenNotSet();
 
         if (salePhase.start > block.timestamp || salePhase.end < block.timestamp) revert OnlyWhileSalePhase();
 
