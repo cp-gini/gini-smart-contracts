@@ -72,9 +72,6 @@ contract GiniVesting is AccessControlUpgradeable, ReentrancyGuardUpgradeable {
     /// @notice Vesting Type => Vesting Period.
     mapping(VestingType => VestingPeriod) public vestingPeriods;
 
-    /// @notice Vesting Type => The total allocations for all accounts.
-    mapping(VestingType => uint256) public commonAllocations;
-
     /// @notice Vesting Type => The total claims for all accounts.
     mapping(VestingType => uint256) public totalClaims;
 
@@ -196,20 +193,22 @@ contract GiniVesting is AccessControlUpgradeable, ReentrancyGuardUpgradeable {
         __AccessControl_init();
         __ReentrancyGuard_init();
 
+        if (_startTimestamp == 0) revert CannotBeZero();
+
         // Initalize Team vesting
-        _validateNSetVesting(VestingType.Team, 30 days * 12, _startTimestamp, 30 days * 24, 300_000_000, 0);
+        _validateNSetVesting(VestingType.Team, 30 days * 12, _startTimestamp, 30 days * 24, 300_000_000 * 1e18, 0);
 
         // Initialize Foundation vesting
-        _validateNSetVesting(VestingType.Foundation, 0, _startTimestamp, 30 days * 12, 220_000_000, 0);
+        _validateNSetVesting(VestingType.Foundation, 0, _startTimestamp, 30 days * 12, 220_000_000 * 1e18, 0);
 
         // Initialize Reserve vesting
-        _validateNSetVesting(VestingType.Reserve, 0, _startTimestamp, 30 days * 150, 800_000_000, 0);
+        _validateNSetVesting(VestingType.Reserve, 0, _startTimestamp, 30 days * 150, 800_000_000 * 1e18, 0);
 
         // Initialize Airdrop vesting
-        _validateNSetVesting(VestingType.Airdrop, 30 days * 6, _startTimestamp, 30 days * 9, 80_000_000, 10);
+        _validateNSetVesting(VestingType.Airdrop, 30 days * 6, _startTimestamp, 30 days * 9, 80_000_000 * 1e18, 10);
 
         // Initialize Seed vesting
-        _validateNSetVesting(VestingType.Seed, 30 days * 6, _startTimestamp, 30 days * 12, 300_000_000, 0);
+        _validateNSetVesting(VestingType.Seed, 30 days * 6, _startTimestamp, 30 days * 12, 300_000_000 * 1e18, 0);
 
         _grantRole(DEFAULT_ADMIN_ROLE, msg.sender);
     }
@@ -219,8 +218,7 @@ contract GiniVesting is AccessControlUpgradeable, ReentrancyGuardUpgradeable {
         address[] calldata _beneficiary,
         uint256[] calldata _amount
     ) external onlyRole(DEFAULT_ADMIN_ROLE) {
-        if (_vestingID == VestingType.Airdrop || _vestingID == VestingType.Reserve)
-            revert NotAllowedVesting(_vestingID);
+        if (_vestingID == VestingType.Airdrop || _vestingID == VestingType.Seed) revert NotAllowedVesting(_vestingID);
 
         VestingPeriod storage vesting = vestingPeriods[_vestingID];
         uint256 beneficiariesLength = _beneficiary.length;
@@ -443,17 +441,14 @@ contract GiniVesting is AccessControlUpgradeable, ReentrancyGuardUpgradeable {
      * initialUnlockPercentage- initial unlock percentage.
      * isAdvisors - true if the vesting is for advisors.
      *
-     * totalAllocations - total amount that the all beneficiaries is allowed to claim.
-     *
      * claimedAmount - amount that the all beneficiaries has already claimed.
      */
     function getVestingData(
         VestingType _vestingID
-    ) external view returns (VestingPeriod memory _vestingData, uint256 totalAllocations, uint256 claimedAmount) {
+    ) external view returns (VestingPeriod memory _vestingData, uint256 claimedAmount) {
         _vestingData = vestingPeriods[_vestingID];
-        totalAllocations = commonAllocations[_vestingID];
         claimedAmount = totalClaims[_vestingID];
-        return (_vestingData, totalAllocations, claimedAmount);
+        return (_vestingData, claimedAmount);
     }
 
     /**
@@ -585,15 +580,13 @@ contract GiniVesting is AccessControlUpgradeable, ReentrancyGuardUpgradeable {
         uint256 _tge
     ) internal {
         vestingPeriods[_vestingID] = VestingPeriod({
-            totalSupply: _totalSupply * 1e18,
+            totalSupply: _totalSupply,
             cliffStartTimestamp: _startTimestamp,
             startTimestamp: _startTimestamp + _cliffDuration,
             endTimestamp: _startTimestamp + _duration + _cliffDuration,
             duration: _duration,
             tge: _tge
         });
-
-        commonAllocations[_vestingID] = _totalSupply;
 
         emit VestingInitialized(
             _vestingID,
@@ -659,7 +652,7 @@ contract GiniVesting is AccessControlUpgradeable, ReentrancyGuardUpgradeable {
         if (_initialUnlock == 0) {
             amountPerMonth = _totalAllocations / (_duration / CLAIM_INTERVAL);
         } else {
-            amountPerMonth = (_totalAllocations - _initialUnlock) / (_duration - CLAIM_INTERVAL);
+            amountPerMonth = (_totalAllocations - _initialUnlock) / (_duration / CLAIM_INTERVAL);
         }
 
         claimableAmount = amountPerMonth * elapsedMonths;
