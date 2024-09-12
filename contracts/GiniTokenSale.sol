@@ -45,10 +45,7 @@ contract GiniTokenSale is Initializable, AccessControlUpgradeable {
      * @dev Example: price = 0.5 + 18 decimals => For 1 USDT you will receive 0.5 Gini tokens.
      * @dev If price = 2 + 18 decimals => For 1 USDT you will receive 2 Gini tokens.
      */
-    uint256 public giniPrice;
-
-    /// @notice Stores the maximum amount of Gini tokens that can be purchased per user.
-    // uint256 public maxCapPerUser;
+    uint256 public giniPricePerUsdt;
 
     /// @notice Stores the amount of token decimals of the purchase token.
     uint256 public purchaseTokenDecimals;
@@ -166,7 +163,7 @@ contract GiniTokenSale is Initializable, AccessControlUpgradeable {
     /**
      * @notice Initializes the contract with the given parameters.
      *
-     * @param _giniPrice - the price of the Gini token
+     * @param _giniPrice - the price of the Gini token per USDT
      * @param _saleStart - the start timestamp of the sale
      * @param _saleEnd - the end timestamp of the sale
      * @param _purchaseToken - the address of the purchase token
@@ -330,7 +327,7 @@ contract GiniTokenSale is Initializable, AccessControlUpgradeable {
     function _setGiniPrice(uint256 _price) internal {
         if (_price == 0) revert InsufficientValue();
 
-        giniPrice = _price;
+        giniPricePerUsdt = _price;
 
         emit SetGiniPrice(_price);
     }
@@ -345,6 +342,6 @@ contract GiniTokenSale is Initializable, AccessControlUpgradeable {
     }
 
     function _calcAmountToReceive(uint256 _value) internal view returns (uint256) {
-        return (giniPrice * _value) / 10 ** purchaseTokenDecimals;
+        return (giniPricePerUsdt * _value) / 10 ** purchaseTokenDecimals;
     }
 }
