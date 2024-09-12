@@ -27,7 +27,6 @@ contract GiniVesting is AccessControlUpgradeable, ReentrancyGuardUpgradeable {
     struct Beneficiary {
         uint256 totalAllocations;
         uint256 claimedAmount;
-        bool areTotallyClaimed;
     }
 
     /**
@@ -184,7 +183,7 @@ contract GiniVesting is AccessControlUpgradeable, ReentrancyGuardUpgradeable {
     /**
      * @dev Emitted when beneficiaries are added.
      */
-    event BeneficiariesAdded(VestingType indexed vestingID);
+    event BeneficiariesAdded(VestingType indexed vestingID, uint256 indexed totalAllocations);
 
     // _______________ Modifiers _______________
 
@@ -224,18 +223,14 @@ contract GiniVesting is AccessControlUpgradeable, ReentrancyGuardUpgradeable {
             revert NotAllowedVesting(_vestingID);
 
         VestingPeriod storage vesting = vestingPeriods[_vestingID];
-        uint256 length = _beneficiary.length;
+        uint256 beneficiariesLength = _beneficiary.length;
         uint256 totalAllocations = 0;
 
-        // Check that vesting already exist and cliff period is not started yet
-        if (vesting.startTimestamp == 0) revert VestingNotInitialized(_vestingID);
-        if (vesting.cliffStartTimestamp < block.timestamp) revert OnlyBeforeVestingCliff();
-
         // Check that arrays are not empty and have the same length
-        if (_beneficiary.length == 0) revert NoBeneficiaries();
-        if (_beneficiary.length != _amount.length) revert ArraysLengthMismatch(_beneficiary.length, _amount.length);
+        if (beneficiariesLength == 0) revert NoBeneficiaries();
+        if (beneficiariesLength != _amount.length) revert ArraysLengthMismatch(beneficiariesLength, _amount.length);
 
-        for (uint256 i = 0; i < length; i++) {
+        for (uint256 i = 0; i < beneficiariesLength; i++) {
             _addBeneficiary(_vestingID, _beneficiary[i], _amount[i]);
             totalAllocations += _amount[i];
         }
@@ -244,69 +239,55 @@ contract GiniVesting is AccessControlUpgradeable, ReentrancyGuardUpgradeable {
 
         vesting.totalSupply -= totalAllocations;
 
-        emit BeneficiariesAdded(_vestingID);
+        emit BeneficiariesAdded(_vestingID, totalAllocations);
     }
 
     function addAirdrop(
-        VestingType _vestingID,
         address[] calldata _beneficiary,
         uint256[] calldata _amount
     ) external onlyRole(DEFAULT_ADMIN_ROLE) {
-        if (_vestingID != VestingType.Airdrop) revert OnlyForAirdrop(uint256(_vestingID));
-
-        VestingPeriod storage vesting = vestingPeriods[_vestingID];
-        uint256 length = _beneficiary.length;
+        VestingPeriod storage vesting = vestingPeriods[VestingType.Airdrop];
+        uint256 beneficiariesLength = _beneficiary.length;
         uint256 totalAllocations = 0;
 
-        // Check that vesting already exist and cliff period is not started yet
-        if (vesting.startTimestamp == 0) revert VestingNotInitialized(_vestingID);
-        if (vesting.cliffStartTimestamp < block.timestamp) revert OnlyBeforeVestingCliff();
-
         // Check that arrays are not empty and have the same length
-        if (_beneficiary.length == 0) revert NoBeneficiaries();
-        if (_beneficiary.length != _amount.length) revert ArraysLengthMismatch(_beneficiary.length, _amount.length);
+        if (beneficiariesLength == 0) revert NoBeneficiaries();
+        if (beneficiariesLength != _amount.length) revert ArraysLengthMismatch(beneficiariesLength, _amount.length);
 
-        for (uint256 i = 0; i < length; i++) {
-            _addBeneficiary(_vestingID, _beneficiary[i], _amount[i]);
+        for (uint256 i = 0; i < beneficiariesLength; i++) {
+            _addBeneficiary(VestingType.Airdrop, _beneficiary[i], _amount[i]);
             totalAllocations += _amount[i];
         }
 
-        if (vesting.totalSupply < totalAllocations) revert TotalSupplyReached(_vestingID);
+        if (vesting.totalSupply < totalAllocations) revert TotalSupplyReached(VestingType.Airdrop);
 
         vesting.totalSupply -= totalAllocations;
 
-        emit BeneficiariesAdded(_vestingID);
+        emit BeneficiariesAdded(VestingType.Airdrop, totalAllocations);
     }
 
     function addScheduled(
-        VestingType _vestingID,
         address[] calldata _beneficiary,
         uint256[] calldata _amount
     ) external onlyRole(DEFAULT_ADMIN_ROLE) {
-        if (_vestingID != VestingType.Seed) revert OnlyForScheduled(uint256(_vestingID));
-
-        VestingPeriod storage vesting = vestingPeriods[_vestingID];
-        uint256 length = _beneficiary.length;
+        VestingPeriod storage vesting = vestingPeriods[VestingType.Seed];
+        uint256 beneficiariesLength = _beneficiary.length;
         uint256 totalAllocations = 0;
 
-        // Check that vesting already exist and cliff period is not started yet
-        if (vesting.startTimestamp == 0) revert VestingNotInitialized(_vestingID);
-        if (vesting.cliffStartTimestamp < block.timestamp) revert OnlyBeforeVestingCliff();
-
         // Check that arrays are not empty and have the same length
-        if (_beneficiary.length == 0) revert NoBeneficiaries();
-        if (_beneficiary.length != _amount.length) revert ArraysLengthMismatch(_beneficiary.length, _amount.length);
+        if (beneficiariesLength == 0) revert NoBeneficiaries();
+        if (beneficiariesLength != _amount.length) revert ArraysLengthMismatch(beneficiariesLength, _amount.length);
 
-        for (uint256 i = 0; i < length; i++) {
-            _addBeneficiary(_vestingID, _beneficiary[i], _amount[i]);
+        for (uint256 i = 0; i < beneficiariesLength; i++) {
+            _addBeneficiary(VestingType.Seed, _beneficiary[i], _amount[i]);
             totalAllocations += _amount[i];
         }
 
-        if (vesting.totalSupply < totalAllocations) revert TotalSupplyReached(_vestingID);
+        if (vesting.totalSupply < totalAllocations) revert TotalSupplyReached(VestingType.Seed);
 
         vesting.totalSupply -= totalAllocations;
 
-        emit BeneficiariesAdded(_vestingID);
+        emit BeneficiariesAdded(VestingType.Seed, totalAllocations);
     }
 
     /**
@@ -319,7 +300,7 @@ contract GiniVesting is AccessControlUpgradeable, ReentrancyGuardUpgradeable {
         Beneficiary storage beneficiary = beneficiaries[_vestingID][msg.sender];
         VestingPeriod memory vesting = vestingPeriods[_vestingID];
 
-        if (beneficiary.areTotallyClaimed) revert NothingToClaim();
+        if (beneficiary.claimedAmount == beneficiary.totalAllocations) revert NothingToClaim();
 
         uint256 amountToClaim = calculateClaimAmount(msg.sender, _vestingID);
         if (amountToClaim == 0)
@@ -332,10 +313,6 @@ contract GiniVesting is AccessControlUpgradeable, ReentrancyGuardUpgradeable {
         beneficiary.claimedAmount += amountToClaim;
         totalClaims[_vestingID] += amountToClaim;
         totalClaimsForAll += amountToClaim;
-
-        if (beneficiary.claimedAmount == beneficiary.totalAllocations) {
-            beneficiary.areTotallyClaimed = true;
-        }
 
         emit Claim(msg.sender, _vestingID, amountToClaim);
 
@@ -361,10 +338,6 @@ contract GiniVesting is AccessControlUpgradeable, ReentrancyGuardUpgradeable {
             beneficiary.claimedAmount += amountToClaim;
             totalClaims[VestingType(vestingIDs[i])] += amountToClaim;
             totalClaimAmount += amountToClaim;
-
-            if (beneficiary.claimedAmount == beneficiary.totalAllocations) {
-                beneficiary.areTotallyClaimed = true;
-            }
 
             emit Claim(msg.sender, VestingType(vestingIDs[i]), amountToClaim);
         }
@@ -598,11 +571,7 @@ contract GiniVesting is AccessControlUpgradeable, ReentrancyGuardUpgradeable {
         if (beneficiaries[_vestingID][_beneficiary].totalAllocations != 0)
             revert BeneficiaryAlreadyExists(_beneficiary);
 
-        beneficiaries[_vestingID][_beneficiary] = Beneficiary({
-            totalAllocations: _amount,
-            claimedAmount: 0,
-            areTotallyClaimed: false
-        });
+        beneficiaries[_vestingID][_beneficiary] = Beneficiary({totalAllocations: _amount, claimedAmount: 0});
 
         userVestings[_beneficiary].push(uint256(_vestingID));
     }
@@ -616,7 +585,7 @@ contract GiniVesting is AccessControlUpgradeable, ReentrancyGuardUpgradeable {
         uint256 _tge
     ) internal {
         vestingPeriods[_vestingID] = VestingPeriod({
-            totalSupply: _totalSupply,
+            totalSupply: _totalSupply * 1e18,
             cliffStartTimestamp: _startTimestamp,
             startTimestamp: _startTimestamp + _cliffDuration,
             endTimestamp: _startTimestamp + _duration + _cliffDuration,
