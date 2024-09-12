@@ -23,11 +23,7 @@ describe("GiniTokenSale", function () {
     let saleStart: number, saleEnd: number;
 
     // Constants
-    const NAME = "Gini";
-    const SYMBOL = "GINI";
-    const TOTAL_SUPPLY = addDec(30_000);
-    const SALE_TOTAL_SUPPLY = addDec(1500);
-
+    const SALE_TOTAL_SUPPLY = addDec(300_000_000);
     const giniPrice = addDec(0.5);
 
     beforeEach(async () => {
@@ -44,17 +40,12 @@ describe("GiniTokenSale", function () {
 
         // Deploy token sale contract
         const Sale = await ethers.getContractFactory("GiniTokenSale", deployer);
-        sale = <GiniTokenSale>(
-            (<unknown>await upgrades.deployProxy(Sale, [giniPrice, saleStart, saleEnd, usdc.target, SALE_TOTAL_SUPPLY]))
-        );
+        sale = <GiniTokenSale>(<unknown>await upgrades.deployProxy(Sale, [giniPrice, saleStart, saleEnd, usdc.target]));
         await sale.waitForDeployment();
 
         // Deploy GINI token
-        gini = await ethers.deployContract("GiniToken", [NAME, SYMBOL, TOTAL_SUPPLY, sale, vestingContract], deployer);
+        gini = await ethers.deployContract("GiniToken", [sale.target, vestingContract.address], deployer);
         await gini.waitForDeployment();
-
-        // Set Gini token
-        await sale.setGiniToken(gini);
 
         snapshotA = await takeSnapshot();
     });
@@ -63,19 +54,17 @@ describe("GiniTokenSale", function () {
 
     describe("# Initializer", function () {
         it("Should allow to set all values correctly", async () => {
-            expect(await sale.giniPrice()).to.eq(giniPrice);
             expect(await sale.getSaleTime()).to.deep.eq([saleStart, saleEnd]);
             expect(await sale.purchaseToken()).to.eq(usdc);
             expect(await sale.hasRole(await sale.DEFAULT_ADMIN_ROLE(), deployer.address)).to.be.true;
             expect(await sale.purchaseTokenDecimals()).to.eq(18);
-            expect(await sale.totalSupply()).to.eq(SALE_TOTAL_SUPPLY);
         });
 
         it("Should revert if initial gini price is equal zero", async () => {
             const Sale = await ethers.getContractFactory("GiniTokenSale", deployer);
 
             await expect(
-                upgrades.deployProxy(Sale, [0, saleStart, saleEnd, usdc.target, SALE_TOTAL_SUPPLY])
+                upgrades.deployProxy(Sale, [0, saleStart, saleEnd, usdc.target])
             ).to.be.revertedWithCustomError(sale, "InsufficientValue");
         });
 
@@ -89,7 +78,7 @@ describe("GiniTokenSale", function () {
             await time.increaseTo(wrongStart + 1);
 
             // Deploy and expect revert
-            await expect(upgrades.deployProxy(Sale, [giniPrice, wrongStart, wrongEnd, usdc.target, SALE_TOTAL_SUPPLY]))
+            await expect(upgrades.deployProxy(Sale, [giniPrice, wrongStart, wrongEnd, usdc.target]))
                 .to.be.revertedWithCustomError(sale, "InvalidPhaseParams")
                 .withArgs(wrongStart, wrongEnd);
 
@@ -98,9 +87,7 @@ describe("GiniTokenSale", function () {
             const wrongEnd2 = wrongStart2 - 1;
 
             // Deploy and expect revert
-            await expect(
-                upgrades.deployProxy(Sale, [giniPrice, wrongStart2, wrongEnd2, usdc.target, SALE_TOTAL_SUPPLY])
-            )
+            await expect(upgrades.deployProxy(Sale, [giniPrice, wrongStart2, wrongEnd2, usdc.target]))
                 .to.be.revertedWithCustomError(Sale, "InvalidPhaseParams")
                 .withArgs(wrongStart2, wrongEnd2);
         });
@@ -109,24 +96,17 @@ describe("GiniTokenSale", function () {
             const Sale = await ethers.getContractFactory("GiniTokenSale", deployer);
 
             await expect(
-                upgrades.deployProxy(Sale, [giniPrice, saleStart, saleEnd, ethers.ZeroAddress, SALE_TOTAL_SUPPLY])
+                upgrades.deployProxy(Sale, [giniPrice, saleStart, saleEnd, ethers.ZeroAddress])
             ).to.be.revertedWithCustomError(Sale, "ZeroAddress");
-        });
-
-        it("Should revert if total supply for sale is zero", async () => {
-            const Sale = await ethers.getContractFactory("GiniTokenSale", deployer);
-
-            await expect(
-                upgrades.deployProxy(Sale, [giniPrice, saleStart, saleEnd, usdc.target, 0])
-            ).to.be.revertedWithCustomError(Sale, "InsufficientValue");
         });
 
         it("Should revert when initialize again", async () => {
             const Sale = await ethers.getContractFactory("GiniTokenSale", deployer);
 
-            await expect(
-                sale.initialize(giniPrice, saleStart, saleEnd, usdc.target, SALE_TOTAL_SUPPLY)
-            ).to.be.revertedWithCustomError(Sale, "InvalidInitialization");
+            await expect(sale.initialize(giniPrice, saleStart, saleEnd, usdc.target)).to.be.revertedWithCustomError(
+                Sale,
+                "InvalidInitialization"
+            );
         });
     });
 
@@ -137,6 +117,7 @@ describe("GiniTokenSale", function () {
 
                 // Check
                 expect(await sale.gini()).to.eq(gini);
+                expect(await gini.balanceOf(sale)).to.eq(SALE_TOTAL_SUPPLY);
             });
 
             it("Should revert if caller is not admin", async () => {
@@ -146,20 +127,38 @@ describe("GiniTokenSale", function () {
                 );
             });
 
+            it("Should revert if Gini token is already set", async () => {
+                await sale.setGiniToken(gini);
+
+                await expect(sale.setGiniToken(gini)).to.be.revertedWithCustomError(sale, "TokenAlreadySet");
+            });
+
             it("Should revert if Gini token address is zero", async () => {
                 await expect(sale.setGiniToken(ethers.ZeroAddress)).to.be.revertedWithCustomError(sale, "ZeroAddress");
             });
 
-            it("Should revert when sale is active", async () => {
+            it("Should revert if total supply if zero", async () => {
+                const Sale = await ethers.getContractFactory("GiniTokenSale", deployer);
+
+                const sale2 = await upgrades.deployProxy(Sale, [giniPrice, saleStart, saleEnd, usdc.target]);
+
+                await expect(sale2.setGiniToken(gini)).to.be.revertedWithCustomError(Sale, "InsufficientValue");
+            });
+
+            it("Should revert while purchase when token is not set", async () => {
                 // Skip time to start of the sale
                 await time.increaseTo(saleStart + 1);
 
-                await expect(sale.setGiniToken(gini)).to.be.revertedWithCustomError(sale, "NotAllowedDuringSale");
+                await expect(sale.purchase(100)).to.be.revertedWithCustomError(sale, "TokenNotSet");
             });
         });
     });
 
     describe("# Purchase", function () {
+        beforeEach(async () => {
+            await sale.setGiniToken(gini);
+        });
+
         it("Should allow to purchase tokens", async () => {
             // Prepare data
             const amount = addDec(400);
@@ -212,7 +211,8 @@ describe("GiniTokenSale", function () {
 
         it("Should revert if total supply is reached", async () => {
             // Prepare data
-            const amount = addDec(2000);
+            const amount = SALE_TOTAL_SUPPLY * 2n;
+            await usdc.connect(deployer).mint(amount);
 
             // Skip start of the sale
             await time.increaseTo(saleStart + 1);
@@ -223,12 +223,15 @@ describe("GiniTokenSale", function () {
             // Purchase
             await sale.connect(deployer).purchase(amount);
 
+            expect(await sale.totalSupply()).to.eq(0);
+
             // Mint USDC from other token
-            await usdc.connect(otherAcc).mint(amount);
+            const revertedAmount = addDec(0.5);
+            await usdc.connect(otherAcc).mint(revertedAmount);
 
             // Purchase from other account
-            await usdc.connect(otherAcc).approve(sale, amount);
-            await expect(sale.connect(otherAcc).purchase(amount)).to.be.revertedWithCustomError(
+            await usdc.connect(otherAcc).approve(sale, revertedAmount);
+            await expect(sale.connect(otherAcc).purchase(revertedAmount)).to.be.revertedWithCustomError(
                 sale,
                 "TotalSupplyReached"
             );
@@ -236,14 +239,18 @@ describe("GiniTokenSale", function () {
     });
 
     describe("# Withdraw remaining tokens", function () {
-        it("Should allow to withdraw remaining tokens (ERC20)", async () => {
+        beforeEach(async () => {
+            await sale.setGiniToken(gini);
+        });
+
+        it("Should allow to withdraw remaining tokens (GINI)", async () => {
             // Prepare data
             const amount = await gini.balanceOf(sale);
             const recipient = otherAcc.address;
             const balanceBefore = await gini.balanceOf(recipient);
 
             // Withdraw
-            await expect(sale.withdrawRemainingTokens(gini, recipient))
+            await expect(sale.withdrawRemainingTokens(recipient))
                 .to.emit(sale, "Withdraw")
                 .withArgs(gini, recipient, amount);
 
@@ -251,7 +258,7 @@ describe("GiniTokenSale", function () {
             expect(await gini.balanceOf(recipient)).to.eq(balanceBefore + amount);
         });
 
-        it("Should allow to withdraw remaining tokens (ETH)", async () => {
+        it("Should allow to rescue tokens (ETH)", async () => {
             // Prepare data
             const amount = eth(1);
             const recipient = otherAcc.address;
@@ -261,7 +268,7 @@ describe("GiniTokenSale", function () {
             await deployer.sendTransaction({ to: sale.target, value: amount });
 
             // Withdraw
-            await expect(sale.withdrawRemainingTokens(ethers.ZeroAddress, recipient))
+            await expect(sale.rescueTokens(ethers.ZeroAddress, recipient))
                 .to.emit(sale, "Withdraw")
                 .withArgs(ethers.ZeroAddress, recipient, amount);
 
@@ -269,14 +276,42 @@ describe("GiniTokenSale", function () {
             expect(await ethers.provider.getBalance(recipient)).to.eq(balanceBefore + amount);
         });
 
+        it("Should allow to rescue tokens (ERC20)", async () => {
+            // Prepare data
+            const amount = addDec(100);
+            const recipient = otherAcc.address;
+            const balanceBefore = await usdc.balanceOf(recipient);
+
+            // Send some USDC to the contract
+            await usdc.connect(deployer).mintFor(sale, amount);
+
+            // Withdraw
+            await expect(sale.rescueTokens(usdc, recipient))
+                .to.emit(sale, "Withdraw")
+                .withArgs(usdc, recipient, amount);
+
+            // Check
+            expect(await usdc.balanceOf(recipient)).to.eq(balanceBefore + amount);
+            expect(await usdc.balanceOf(sale)).to.eq(0);
+        });
+
         it("Should revert if caller is not admin", async () => {
             await expect(
-                sale.connect(otherAcc).withdrawRemainingTokens(gini, otherAcc.address)
+                sale.connect(otherAcc).withdrawRemainingTokens(otherAcc.address)
+            ).to.be.revertedWithCustomError(sale, "AccessControlUnauthorizedAccount");
+
+            await expect(
+                sale.connect(otherAcc).rescueTokens(ethers.ZeroAddress, otherAcc.address)
             ).to.be.revertedWithCustomError(sale, "AccessControlUnauthorizedAccount");
         });
 
         it("Should revert if recipient is zero address", async () => {
-            await expect(sale.withdrawRemainingTokens(gini, ethers.ZeroAddress)).to.be.revertedWithCustomError(
+            await expect(sale.withdrawRemainingTokens(ethers.ZeroAddress)).to.be.revertedWithCustomError(
+                sale,
+                "ZeroAddress"
+            );
+
+            await expect(sale.rescueTokens(ethers.ZeroAddress, ethers.ZeroAddress)).to.be.revertedWithCustomError(
                 sale,
                 "ZeroAddress"
             );
@@ -286,10 +321,49 @@ describe("GiniTokenSale", function () {
             // Skip time to start of the sale
             await time.increaseTo(saleStart + 1);
 
-            await expect(sale.withdrawRemainingTokens(gini, otherAcc.address)).to.be.revertedWithCustomError(
+            await expect(sale.withdrawRemainingTokens(otherAcc.address)).to.be.revertedWithCustomError(
                 sale,
                 "WithdrawingDuringSale"
             );
+        });
+
+        it("Should revert if rescue token is GINI", async () => {
+            await expect(sale.rescueTokens(gini, otherAcc.address))
+                .to.be.revertedWithCustomError(sale, "NotAllowedToken")
+                .withArgs(gini);
+        });
+    });
+
+    describe("# Prolong sale", function () {
+        it("Should allow to prolong sale", async () => {
+            // Prepare data
+            const newEnd = saleEnd + time.duration.days(2);
+
+            // Prolong
+            await expect(sale.prolongSale(newEnd)).to.emit(sale, "SalePhaseSet").withArgs(saleStart, newEnd);
+
+            // Check
+            expect(await sale.getSaleTime()).to.deep.eq([saleStart, newEnd]);
+        });
+
+        it("Should revert if caller is not admin", async () => {
+            await expect(sale.connect(otherAcc).prolongSale(saleEnd)).to.be.revertedWithCustomError(
+                sale,
+                "AccessControlUnauthorizedAccount"
+            );
+        });
+
+        it("Should revert if new end is already ended", async () => {
+            // Skip time to the end of the sale
+            await time.increaseTo(saleEnd + 1);
+
+            await expect(sale.prolongSale(saleEnd + 1000)).to.be.revertedWithCustomError(sale, "SaleAlreadyEnded");
+        });
+
+        it("Should revert if new end is less than current", async () => {
+            await expect(sale.prolongSale(saleEnd - 1000))
+                .to.be.revertedWithCustomError(sale, "InvalidPhaseParams")
+                .withArgs(saleEnd, saleEnd - 1000);
         });
     });
 
@@ -323,18 +397,12 @@ describe("GiniTokenSale", function () {
             // Deploy token sale contract
             const Sale = await ethers.getContractFactory("GiniTokenSale", deployer);
             const sale2 = <GiniTokenSale>(
-                (<unknown>(
-                    await upgrades.deployProxy(Sale, [giniPrice, saleStart, saleEnd, usdt.target, SALE_TOTAL_SUPPLY])
-                ))
+                (<unknown>await upgrades.deployProxy(Sale, [giniPrice, saleStart, saleEnd, usdt.target]))
             );
             await sale2.waitForDeployment();
 
             // Deploy GINI token
-            const gini = await ethers.deployContract(
-                "GiniToken",
-                [NAME, SYMBOL, TOTAL_SUPPLY, sale2, vestingContract],
-                deployer
-            );
+            const gini = await ethers.deployContract("GiniToken", [sale2, vestingContract], deployer);
             await gini.waitForDeployment();
 
             // Set Gini token
