@@ -403,7 +403,7 @@ contract GiniVesting is AccessControlUpgradeable, ReentrancyGuardUpgradeable {
         }
 
         // calculate initial unlock amount
-        if (block.timestamp < vesting.cliffStartTimestamp) return 0;
+        if (block.timestamp <= vesting.cliffStartTimestamp) return 0;
 
         initialUnlock = _calcInitialUnlock(beneficiary.totalAllocations, vesting.tge);
 
@@ -638,6 +638,6 @@ contract GiniVesting is AccessControlUpgradeable, ReentrancyGuardUpgradeable {
             return _totalAllocations - _initialUnlock;
         }
 
-        claimableAmount = ((_totalAllocations - _initialUnlock) / (_duration / CLAIM_INTERVAL)) * elapsedMonths;
+        claimableAmount = (((_totalAllocations - _initialUnlock) * elapsedMonths) / _duration ) / CLAIM_INTERVAL;
     }
 }
