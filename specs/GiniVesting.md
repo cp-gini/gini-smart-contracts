@@ -308,9 +308,10 @@ The [`GiniVesting`](../contracts/GiniVesting.sol) contract is a vesting contract
             return 0;
         }
 
-        if (block.timestamp > vesting.cliffStartTimestamp) {
-            initialUnlock = _calcInitialUnlock(beneficiary.totalAllocations, vesting.tge);
-        }
+        // calculate initial unlock amount
+        if (block.timestamp < vesting.cliffStartTimestamp) return 0;
+
+        initialUnlock = _calcInitialUnlock(beneficiary.totalAllocations, vesting.tge);
 
         uint256 claimableAmount = _calcClaimableAmount(
             block.timestamp,
@@ -320,13 +321,7 @@ The [`GiniVesting`](../contracts/GiniVesting.sol) contract is a vesting contract
             initialUnlock
         );
 
-        if (alreadyClaimed != 0 && initialUnlock > 0) {
-            claimAmount = claimableAmount + initialUnlock - alreadyClaimed;
-        } else if (alreadyClaimed == 0 && initialUnlock > 0) {
-            claimAmount = claimableAmount + initialUnlock;
-        } else {
-            claimAmount = claimableAmount - alreadyClaimed;
-        }
+        claimAmount = claimableAmount + initialUnlock - alreadyClaimed;
 
         if (claimAmount + alreadyClaimed > beneficiary.totalAllocations)
             revert ClaimAmountExceedsVestingAmount(_vestingID, _beneficiary, claimAmount, beneficiary.totalAllocations);
