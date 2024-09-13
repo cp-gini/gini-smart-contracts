@@ -403,9 +403,9 @@ contract GiniVesting is AccessControlUpgradeable, ReentrancyGuardUpgradeable {
         }
 
         // calculate initial unlock amount
-        if (block.timestamp > vesting.cliffStartTimestamp) {
-            initialUnlock = _calcInitialUnlock(beneficiary.totalAllocations, vesting.tge);
-        }
+        if (block.timestamp < vesting.cliffStartTimestamp) return 0;
+
+        initialUnlock = _calcInitialUnlock(beneficiary.totalAllocations, vesting.tge);
 
         // calculate claimable amount
         uint256 claimableAmount = _calcClaimableAmount(
@@ -416,13 +416,7 @@ contract GiniVesting is AccessControlUpgradeable, ReentrancyGuardUpgradeable {
             initialUnlock
         );
 
-        if (alreadyClaimed != 0 && initialUnlock > 0) {
-            claimAmount = claimableAmount + initialUnlock - alreadyClaimed;
-        } else if (alreadyClaimed == 0 && initialUnlock > 0) {
-            claimAmount = claimableAmount + initialUnlock;
-        } else {
-            claimAmount = claimableAmount - alreadyClaimed;
-        }
+        claimAmount = claimableAmount + initialUnlock - alreadyClaimed;
 
         // should never happen
         if (claimAmount + alreadyClaimed > beneficiary.totalAllocations)
@@ -641,20 +635,9 @@ contract GiniVesting is AccessControlUpgradeable, ReentrancyGuardUpgradeable {
         if (elapsedMonths == 0) return 0;
 
         if (_timestamp > _startTimestamp + _duration) {
-            if (_initialUnlock == 0) {
-                return _totalAllocations;
-            } else {
-                return _totalAllocations - _initialUnlock;
-            }
+            return _totalAllocations - _initialUnlock;
         }
 
-        uint256 amountPerMonth;
-        if (_initialUnlock == 0) {
-            amountPerMonth = _totalAllocations / (_duration / CLAIM_INTERVAL);
-        } else {
-            amountPerMonth = (_totalAllocations - _initialUnlock) / (_duration / CLAIM_INTERVAL);
-        }
-
-        claimableAmount = amountPerMonth * elapsedMonths;
+        claimableAmount = ((_totalAllocations - _initialUnlock) / (_duration / CLAIM_INTERVAL)) * elapsedMonths;
     }
 }
