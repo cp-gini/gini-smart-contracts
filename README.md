@@ -44,615 +44,160 @@ Use `$ npm run test-t` to see events and calls when running tests, or `$ npm run
 
 Use `$ npm run clean` and try again.
 
-## Documentation
+## Smart contracts documentation
 
-### Documentation for [`GiniToken`](./contracts/GiniToken.sol) Contract
+Documentation for all smart contracts can be found by the following links:
 
-#### Overview
+-   [`GiniToken`](./specs/GiniToken.md): documentation for the GINI token.
+-   [`GiniTokenSale`](./specs/GiniTokenSale.md): documentation for the token sale.
+-   [`GiniVesting`](./specs/GiniVesting.md): documentation for the vesting contract.
 
-The [`GiniToken`](./contracts/GiniToken.sol) contract is an ERC20-compliant token contract with additional features such as access control, permit functionality, and a denylist mechanism. It leverages OpenZeppelin's libraries to ensure security and standard compliance.
+### Documentation for deployment scripts and how to run it
 
-#### Libraries
+#### Setup preparation
 
--   **ERC20**: Provides the standard implementation of the ERC20 token.
--   **ERC20Permit**: Adds permit functionality to the ERC20 token, allowing approvals via signatures.
--   **AccessControl**: Provides role-based access control mechanisms.
+All necessary settings for the deployment can be found [`here`](./settings.json). This JSON file contains configuration settings for the Gini token ecosystem, including addresses for various contracts and timestamps for vesting and token sale events.
 
-#### Storage Variables
-
--   **denylist**: A mapping that stores `true`) for addresses for which all token transfers are denied.
-    -   `mapping(address => bool) public denylist`: Maps an address to a boolean indicating if the address is denied for all token transfers.
-
-#### Errors
-
--   **ZeroAddress()**: Reverted when public sale or vesting contract addresses are zero during contract creation.
--   **DeniedAddress(address \_addr)**: Reverted when a token transfer is attempted from or to a denied address.
-    -   `_addr`: The denied address from or to which a token transfer is attempted.
--   **AlreadyDenied(address \_addr)**: Reverted when re-denying a denied address.
-    -   `_addr`: The denied address attempted to be denied again.
-
-#### Constructor
-
-Initializes the contract with the given parameters:
-
-```solidity
-constructor(
-    string memory name,
-    string memory symbol,
-    address publicSaleAddress,
-    address vestingContractAddress
-)
+```json
+{
+    "addresses": {
+        "GiniToken": "",
+        "GiniTokenSale": "",
+        "GiniVesting": "",
+        "USDT": "0xdAC17F958D2ee523a2206206994597C13D831ec7" // USDT address on Ethereum mainnet
+    },
+    "vestingStartTimestamp": 1727136000, // Tuesday, September 24, 2024 12:00:00 AM (GMT)
+    "giniPricePerUSDT": 1,
+    "saleStartTimestamp": 0,
+    "saleEndTimestamp": 0
+}
 ```
 
--   `name`: The name of the token.
--   `symbol`: The symbol of the token.
--   `publicSaleAddress`: The address of the public sale contract.
--   `vestingContractAddress`: The address of the vesting contract.
+#### Fields
 
-#### External Functions
+-   **addresses**: An object containing the addresses of various contracts and tokens.
 
--   **denyAddress(address \_addr)**: Adds an address to the denylist.
+    -   **GiniToken**: The address of the Gini token contract. This field is currently empty and should be populated with the actual contract address after deploy.
+    -   **GiniTokenSale**: The address of the Gini token sale contract. This field is currently empty and should be populated with the actual contract address after deploy.
+    -   **GiniVesting**: The address of the Gini vesting contract. This field is currently empty and should be populated with the actual contract address after deploy.
+    -   **USDT**: The address of the USDT (Tether) token on the Ethereum mainnet. This is set to `0xdAC17F958D2ee523a2206206994597C13D831ec7`.
 
-    -   `_addr`: The address to be denied.
+-   **vestingStartTimestamp**: The start timestamp for the vesting period, set to `1727136000`, which corresponds to Tuesday, September 24, 2024, 12:00:00 AM (GMT).
 
--   **allowAddress(address \_addr)**: Removes an address from the denylist.
+-   **giniPricePerUSDT**: The price of one Gini token in terms of USDT. This is set to `1`, indicating that 1 Gini token costs 1 USDT. In case when 1 USDT token is equal to 2 GINI tokens, price must be set to `2`
 
-    -   `_addr`: The address to be allowed.
+-   **saleStartTimestamp**: The start timestamp for the token sale. This field is currently set to `0` and should be updated with the actual start timestamp.
 
--   **permit(address owner, address spender, uint256 value, uint256 deadline, uint8 v, bytes32 r, bytes32 s)**: Allows approvals via signatures.
-    -   `owner`: The address of the token owner.
-    -   `spender`: The address which will spend the tokens.
-    -   `value`: The amount of tokens to be spent.
-    -   `deadline`: The time until which the permit is valid.
-    -   `v`, `r`, `s`: The components of the signature.
+-   **saleEndTimestamp**: The end timestamp for the token sale. This field is currently set to `0` and should be updated with the actual end timestamp. The token sale contract also has option to prolong sale end.
 
-#### Events
+### Query of the deployment
 
--   **AddressDenied(address indexed \_addr)**: Emitted when an address is added to the denylist.
+1. Token sale contract
+2. Token vesting contract
+3. Token contract
 
-    -   `_addr`: The address that was denied.
+### Documentation for [`GiniTokenSale.ts`](./scripts/deployment/separately/GiniTokenSale.ts)
 
--   **AddressAllowed(address indexed \_addr)**: Emitted when an address is removed from the denylist.
-    -   `_addr`: The address that was allowed.
+This TypeScript file is responsible for deploying the Gini token sale by utilizing the [`deployGiniTokenSale`](./scripts/deployment/separately/exported-functions/deployGiniTokenSale.ts) function and configuration settings from a JSON file.
 
-#### Functions
+#### Imports
 
--   **transfer(address recipient, uint256 amount)**: Transfers tokens to a specified address.
+-   **deployGiniTokenSale**: A function imported from `./exported-functions/deployGiniTokenSale` that handles the deployment of the Gini token sale.
+-   **addDec**: A helper function imported from `../../../test/helpers` that adjusts the decimal places for the Gini price.
+-   **settings**: Configuration settings imported from `../../../settings.json`, which includes addresses for various contracts and other parameters.
 
-    -   `recipient`: The address to which the tokens will be transferred.
-    -   `amount`: The amount of tokens to transfer.
+#### Main Function
 
--   **approve(address spender, uint256 amount)**: Approves a specified address to spend a certain amount of tokens on behalf of the caller.
+The `main` function is an asynchronous function that performs the following steps:
 
-    -   `spender`: The address which will spend the tokens.
-    -   `amount`: The amount of tokens to be spent.
+1. **Retrieve and Adjust Gini Price**:
 
--   **transferFrom(address sender, address recipient, uint256 amount)**: Transfers tokens from one address to another using an allowance mechanism.
+    - `giniPrice`: The price of Gini tokens in terms of USDT, adjusted using the `addDec` helper function.
 
-    -   `sender`: The address from which the tokens will be transferred.
-    -   `recipient`: The address to which the tokens will be transferred.
-    -   `amount`: The amount of tokens to transfer.
+    ❌Make sure you read block about settings and how to set the price properly❌
 
--   **allowance(address owner, address spender)**: Returns the remaining number of tokens that `spender` will be allowed to spend on behalf of `owner`.
+2. **Retrieve Sale Timestamps**:
+    - `saleStart`: The start timestamp for the token sale, retrieved from `settings.saleStartTimestamp`.
+    - `saleEnd`: The end timestamp for the token sale, retrieved from `settings.saleEndTimestamp`.
+3. **Retrieve Purchase Token Address**:
 
-    -   `owner`: The address which owns the tokens.
-    -   `spender`: The address which will spend the tokens.
+    - `purchaseToken`: The address of the stable coin (USDT) that will be used for purchasing Gini tokens, retrieved from `settings.addresses.USDT`.
 
--   **balanceOf(address account)**: Returns the balance of tokens for a specified address.
-    -   `account`: The address to query the balance of.
+4. **Deploy Gini Token Sale**: Calls the `deployGiniTokenSale` function with the retrieved and adjusted parameters as arguments.
 
-### [`GiniTokenSale`](./contracts/GiniTokenSale.sol) Contract
+#### Verification on the Etherscan
 
-#### Overview
+The script will automatically verify smart contract on the etherscan, make sure you set the `ETHERSCAN_API_KEY` in `.env` file.
 
-The [`GiniTokenSale`](./contracts/GiniTokenSale.sol) contract is a smart contract designed to facilitate the sale of Gini tokens. It allows users to purchase Gini tokens using a specified purchase token (e.g., stablecoins) during a defined sale phase. The contract includes various safety checks and administrative functions to manage the sale process.
+#### Running the Script
 
-#### Libraries
-
--   **SafeERC20**: This library from OpenZeppelin is used to wrap around ERC20 operations that throw on failure, ensuring safety in token transfers.
-
-#### Structs
-
--   **SalePhase**: Stores the start and end timestamps of the sale.
-    -   `uint256 start`: The start timestamp of the sale.
-    -   `uint256 end`: The end timestamp of the sale.
-
-#### Storage Variables
-
--   **salePhase**: Stores the start and end timestamps of the sale.
--   **giniPrice**: Stores the price of the Gini token.
--   **purchaseTokenDecimals**: Stores the amount of token decimals of the purchase token.
--   **totalSupply**: Stores the total remaining amount of Gini tokens that can be purchased.
--   **purchaseToken**: Stores the purchase token.
--   **gini**: Stores the Gini token.
--   **purchaseAmount**: Maps the address of the user to the amount of purchased Gini tokens.
-
-#### Errors
-
--   **InvalidPhaseParams(uint256 start, uint256 end)**: Reverts if invalid phase parameters are passed.
--   **ZeroAddress()**: Reverts if a zero address is passed.
--   **InsufficientValue()**: Reverts if an insufficient value is passed.
--   **WithdrawingDuringSale()**: Reverts if withdrawing during the sale.
--   **CannotBuyZeroTokens()**: Reverts if attempting to buy zero tokens.
--   **OnlyWhileSalePhase()**: Reverts if the purchase is not during the sale time.
--   **NotAllowedDuringSale()**: Reverts if an action is not allowed during the sale.
--   **TotalSupplyReached()**: Reverts if the total supply is reached.
-
-#### Events
-
--   **SalePhaseSet(uint256 start, uint256 end)**: Emitted when the sale phase is set.
--   **SetGiniPrice(uint256 value)**: Emitted when the Gini price is set.
--   **SetPurchaseToken(address token)**: Emitted when the purchase token is set.
--   **Withdraw(address token, address recipient, uint256 value)**: Emitted when withdrawing ERC20 tokens or native tokens.
--   **SetGiniToken(address gini)**: Emitted when the Gini token is set.
--   **Purchase(address user, uint256 amount)**: Emitted when a purchase is made.
--   **SetTotalSupply(uint256 value)**: Emitted when the total supply is set.
-
-#### Initializer
-
-Initializes the contract with the given parameters:
-
-```solidity
-initialize(
-    uint256 _giniPrice,
-    uint256 _saleStart,
-    uint256 _saleEnd,
-    address _purchaseToken,
-    uint256 _totalSupply
-)
-```
-
--   `_giniPrice`: The price of the Gini token.
--   `_saleStart`: The start timestamp of the sale.
--   `_saleEnd`: The end timestamp of the sale.
--   `_purchaseToken`: The address of the purchase token.
--   `_totalSupply`: The total remaining amount of Gini tokens that can be purchased.
-
-#### External Functions
-
--   **purchase(uint256 \_value)**: Allows the user to purchase Gini tokens.
-
-    -   `_value`: The amount of stablecoins to send to the contract.
-
--   **withdrawRemainingTokens(address \_token, address \_recipient)**: Allows admin to withdraw the remaining ERC20 or native token.
-
-    -   `_token`: The address of the token. If zero address, it will withdraw native token.
-    -   `_recipient`: The address of the recipient.
-
--   **receive() external payable**: Allows the contract to receive ETH.
-
--   **setGiniToken(address \_token)**: Allows admin to set the address of the Gini token.
-
-    -   `_token`: The address of the Gini token.
-
--   **getReceivedAmount(uint256 \_purchaseAmount) external view returns (uint256)**: Calculates the amount to receive of Gini tokens.
-
-    -   `_purchaseAmount`: The amount of purchase token.
-
--   **getSaleTime() external view returns (uint256, uint256)**: Returns the start and end time of the sale.
-
-#### Internal Functions
-
--   **\_setTotalSupply(uint256 \_value)**: Sets the total supply of Gini tokens.
-
-    -   `_value`: The total remaining amount of Gini tokens that can be purchased.
-
--   **\_setSalePhase(uint256 \_start, uint256 \_end)**: Sets the sale phase.
-
-    -   `_start`: The start timestamp of the sale.
-    -   `_end`: The end timestamp of the sale.
-
--   **\_setGiniPrice(uint256 \_price)**: Sets the price of the Gini token.
-
-    -   `_price`: The price of the Gini token.
-
--   **\_setPurchaseToken(address \_token)**: Sets the purchase token.
-
-    -   `_token`: The address of the purchase token.
-
--   **\_calcAmountToReceive(uint256 \_value) internal view returns (uint256)**: Calculates the amount of Gini tokens to receive based on the purchase value.
-    -   `_value`: The amount of stablecoins sent to the contract.
-
-### Documentation for [`GiniVesting`](./contracts/GiniVesting.sol) Contract
-
-#### Overview
-
-The [`GiniVesting`](./contracts/GiniVesting.sol) contract is designed to manage the vesting of Gini tokens. It allows tokens to be released to beneficiaries over a specified vesting schedule. The contract ensures that tokens are released gradually and only after the vesting cliff has passed.
-
-### Documentation for `GiniVesting.sol`
-
-#### Overview
-
-The `GiniVesting` contract is designed to manage the vesting of tokens for different purposes such as team, foundation, and reserve. It includes mechanisms for setting vesting periods, allocating tokens, and handling claims.
-
-#### Vesting Types
-
--   **Team**: Vesting for the team (equals to 0).
--   **Foundation**: Vesting for the foundation (equals to 1).
--   **Reserve**: Vesting for the reserve (equals to 2).
-
-#### Libraries
-
--   **SafeERC20**: This library from OpenZeppelin is used to wrap around ERC20 operations that throw on failure, ensuring safety in token transfers.
-
-#### Structs
-
--   **Beneficiary**: Stores the vesting information for a beneficiary.
-
-    -   `uint256 totalAllocations`: The total amount that the beneficiary is allowed to claim.
-    -   `uint256 claimedAmount`: The amount that the beneficiary has already claimed.
-    -   `bool areTotallyClaimed`: Indicates if the beneficiary has already claimed all tokens.
-
--   **VestingPeriod**: Defines the design of a vesting period.
-
-    -   `uint256 cliffStartTimestamp`: The start timestamp of the cliff period.
-    -   `uint256 startTimestamp`: The start timestamp of the vesting period.
-    -   `uint256 endTimestamp`: The end timestamp of the vesting period.
-    -   `uint256 duration`: The duration of the vesting period.
-
--   **VestingType**: Defines the type of the Vesting.
-    -   `Team`: Vesting for the team (equals to 0).
-    -   `Foundation`: Vesting for the foundation (equals to 1).
-    -   `Reserve`: Vesting for the reserve (equals to 2).
-
-#### Storage Variables
-
--   **CLAIM_INTERVAL**: The interval at which claims can be made.
-
-    -   `uint256 public constant CLAIM_INTERVAL = 30 days`: The claim interval in days.
-
--   **vestingPeriods**: A mapping that stores the vesting periods for each vesting ID.
-
-    -   `mapping(uint256 => VestingPeriod) public vestingPeriods`: Maps a vesting ID to its vesting period.
-
--   **commonAllocations**: A mapping that stores the total allocations for all accounts for each vesting ID.
-
-    -   `mapping(uint256 => uint256) public commonAllocations`: Maps a vesting ID to its total allocations.
-
--   **totalClaims**: A mapping that stores the total claims for all accounts for each vesting ID.
-
-    -   `mapping(uint256 => uint256) public totalClaims`: Maps a vesting ID to its total claims.
-
--   **userVestings**: A mapping that stores all vesting IDs for each user.
-
-    -   `mapping(address => uint256[]) public userVestings`: Maps a user address to an array of vesting IDs.
-
--   **beneficiaries**: A mapping that stores the beneficiary information for each vesting ID.
-
-    -   `mapping(VestingType => mapping(address => Beneficiary)) public beneficiaries`: Maps a vesting ID and beneficiary address to their beneficiary information.
-
--   **gini**: The ERC20 token being vested.
-
-    -   `IERC20 public gini`: The ERC20 token contract.
-
--   **totalSupply**: The total supply of the vesting token.
-
-    -   `uint256 public totalSupply`: The total supply of the vesting token.
-
--   **totalClaimsForAll**: The total amount of claims from all users and vestings.
-    -   `uint256 public totalClaimsForAll`: The total amount of claims from all users and vestings.
-
-#### Errors
-
--   **ZeroAddress()**: Reverted when a zero address is provided where a valid address is required.
--   **ArraysLengthMismatch(uint256 length1, uint256 length2)**: Reverted when the lengths of two arrays do not match.
--   **NoBeneficiaries()**: Reverted when there are no beneficiaries.
--   **ZeroVestingAmount(address \_beneficiary)**: Reverted when a zero vesting amount is passed.
--   **BeneficiaryAlreadyExists(address \_beneficiary)**: Reverted when a beneficiary already exists.
--   **InvalidVestingParams(uint256 \_cliffStartTimestamp, uint256 \_startTimestamp, uint256 \_endTimestamp)**: Reverted when vesting parameters are invalid.
--   **AlreadyInitialized()**: Reverted when the vesting is already initialized.
--   **CannotBeZero()**: Reverted when the total supply is zero.
--   **TotalSupplyReached()**: Reverted when the total supply is reached.
--   **VestingTokenRescue(address token)**: Reverted when the vesting token rescue fails.
--   **NothingToClaim()**: Reverted when there is nothing to claim.
--   **OnlyAfterVestingStart(VestingType vestingID)**: Reverted when the vesting is not started yet.
--   **ClaimAmountExceedsVestingAmount(VestingType \_vestingID, address \_beneficiary, uint256 \_claimAmount, uint256 \_totalAllocations)**: Reverted when the claim amount exceeds the vesting amount.
-
-#### Events
-
--   **Claim(address indexed \_user, VestingType \_vestingID, uint256 indexed \_amount)**: Emitted when a claim is successful.
-
-    -   `_user`: The address of the user.
-    -   `_vestingID`: The ID of the vesting.
-    -   `_amount`: The amount of the claim.
-
--   **VestingInitialized(VestingType indexed vestingID, uint256 cliffStartTimestamp, uint256 startTimestamp, uint256 endTimestamp)**: Emitted when the vesting is initialized.
-
-    -   `vestingID`: The ID of the vesting.
-    -   `cliffStartTimestamp`: The start timestamp of the cliff period.
-    -   `startTimestamp`: The start timestamp of the vesting.
-    -   `endTimestamp`: The end timestamp of the vesting.
-
--   **SetGiniToken(address token)**: Emitted when the token for the vesting is set.
-
-    -   `token`: The address of the token.
-
--   **ERC20Rescued(address indexed \_token, address indexed \_to, uint256 indexed \_amount)**: Emitted when ERC20 tokens are rescued.
-    -   `_token`: The address of the token.
-    -   `_to`: The address to send tokens to.
-    -   `_amount`: The amount of tokens rescued.
-
-#### Modifiers
-
--   **notZeroAddress(address \_address)**: Ensures that the provided address is not zero.
-    -   `_address`: The address to check.
-
-#### Initializer
-
-Initializes the contract with the given parameters:
-
-```solidity
-initialize(uint256 _totalSupply)
-```
-
--   `_totalSupply`: The total amount of tokens that can be allocated.
-
-#### External Functions
-
--   **initVesting(VestingType \_vestingID, uint256 \_cliffStartTimestamp, uint256 \_startTimestamp, uint256 \_endTimestamp, address[] calldata \_beneficiaries, uint256[] calldata \_amounts)**: Initializes a new vesting schedule.
-
-    -   `_vestingID`: The ID of the vesting.
-    -   `_cliffStartTimestamp`: The start timestamp of the cliff period.
-    -   `_startTimestamp`: The start timestamp of the vesting.
-    -   `_endTimestamp`: The end timestamp of the vesting.
-    -   `_beneficiaries`: An array of beneficiary addresses.
-    -   `_amounts`: An array of amounts corresponding to each beneficiary.
-
--   **claim(VestingType \_vestingID)**: Claims tokens from the specified vesting.
-
-    -   `_vestingID`: The ID of the vesting.
-
--   **claimAll()**: Claims all available tokens from all vestings of the caller.
-
--   **rescueERC20(IERC20 \_token, address \_to)**: Rescues ERC20 tokens from the contract.
-
-    -   `_token`: The address of the token to rescue.
-    -   `_to`: The address to send tokens to.
-
--   **setGiniToken(address \_token)**: Sets the Gini token that will be used for vesting.
-    -   `_token`: The address of the token.
-
-#### Public Functions
-
--   **calculateClaimAmount(address \_beneficiary, VestingType \_vestingID)**: Calculates the claim amount for the beneficiary.
-
-    -   `_beneficiary`: The address of the beneficiary.
-    -   `_vestingID`: The ID of the vesting.
-    -   Returns: The amount of tokens that can be claimed by the beneficiary.
-
--   **getVestingData(VestingType \_vestingID)**: Returns all vesting data.
-
-    -   `_vestingID`: The ID of the vesting.
-    -   Returns: The vesting period, total allocations, and claimed amount.
-
--   **getClaimsAmountForAllVestings(address \_beneficiary)**: Returns all info about available claim amount for all vestings of the user.
-
-    -   `_beneficiary`: The address of the beneficiary.
-    -   Returns: The total amount, user vestings, and amounts.
-
--   **getVestingsDuration(address \_beneficiary)**: Returns all vestings duration of the beneficiary.
-
-    -   `_beneficiary`: The address of the beneficiary.
-    -   Returns: The user vestings and vestings duration.
-
--   **getAllocationsForAllVestings(address \_beneficiary)**: Returns total allocations amount for each vesting ID of the beneficiary.
-
-    -   `_beneficiary`: The address of the beneficiary.
-    -   Returns: The user vestings and total allocations.
-
--   **getTotalClaims(address \_beneficiary)**: Returns total claims from all vestings of the beneficiary.
-
-    -   `_beneficiary`: The address of the beneficiary.
-    -   Returns: The user vestings and total claimed amount.
-
--   **getUserVestings(address \_beneficiary)**: Returns an array of all user vestings.
-    -   `_beneficiary`: The address of the beneficiary.
-    -   Returns: The user vestings.
-
-#### Internal Functions
-
--   **\_addBeneficiary(VestingType \_vestingID, address \_beneficiary, uint256 \_amount)**: Adds a beneficiary to the vesting.
-
-    -   `_vestingID`: The ID of the vesting.
-    -   `_beneficiary`: The address of the beneficiary.
-    -   `_amount`: The amount of tokens to be vested.
-
--   **\_validateNSetVesting(VestingType \_vestingID, uint256 \_cliffStartTimestamp, uint256 \_startTimestamp, uint256 \_endTimestamp)**: Validates and sets the vesting parameters.
-
-    -   `_vestingID`: The ID of the vesting.
-    -   `_cliffStartTimestamp`: The start timestamp of the cliff period.
-    -   `_startTimestamp`: The start timestamp of the vesting.
-    -   `_endTimestamp`: The end timestamp of the vesting.
-
--   **\_calcClaimableAmount(uint256 \_timestamp, uint256 \_totalAllocations, uint256 \_startTimestamp, uint256 \_duration)**: Calculates the amount that the beneficiary is allowed to claim.
-
-    -   `_timestamp`: The current timestamp.
-    -   `_totalAllocations`: The total amount that the beneficiary is allowed to claim.
-    -   `_startTimestamp`: The start timestamp of the vesting.
-    -   `_duration`: The duration of the vesting.
-    -   Returns: The claimable amount.
-
--   **\_secondsToMonth(uint256 \_seconds)**: Converts seconds to months.
-    -   `_seconds`: The number of seconds.
-    -   Returns: The number of months.
-
-### Documentation for [`deploy.ts`](./scripts/deployment/deploy.ts) and how to run it
-
-#### Description
-
-This script is used for the deployment and automatic verification of all the contracts located in the [`contracts/`](./contracts/) directory. The script ensures that the contracts are deployed in the correct order and that their interdependencies are properly configured.
-
-### Get timestamp time for future steps
-
-You can get the time stamp of any time using this resource [`Epoch Converter`](https://www.epochconverter.com/)
-
-#### Detailed Steps
-
-1. **Import Statements**
-
-    - The script imports necessary modules and functions, including deployment functions for each contract and helper functions for time manipulation and decimal adjustments.
-
-    ```typescript
-    import { addDec } from "../../test/helpers";
-    import { deployGiniTokenSale } from "./separately/exported-functions/deployGiniTokenSale";
-    import { deployGiniVesting } from "./separately/exported-functions/deployGiniVesting";
-    import { deployGiniToken } from "./separately/exported-functions/deployGiniToken";
-    ```
-
-2. **Main Function**
-
-    - The `main` function is the core of the script, where the deployment process is defined.
-
-    ```typescript
-    async function main() {
-    ```
-
-3. **Deployment and Verification of `GiniTokenSale`**
-
-    - Sets up the data required for deploying the `GiniTokenSale` contract, including the token price, start and end times, purchase token address, and total supply.
-
-    ```typescript
-    const giniPrice = addDec(0.5); // equal to 0.5 stable coin
-    const saleStart = 1000; // The timestamp of the sale start
-    const saleEnd = 2000; // The timestamp of the sale end
-    const purchaseToken = ""; // The address of the stable coin
-    const totalSupply = addDec(30_000); // Total supply for the sale
-
-    const giniTokenSale = await deployGiniTokenSale(giniPrice, saleStart, saleEnd, purchaseToken, totalSupply);
-    ```
-
-4. **Deployment and Verification of `GiniVesting`**
-
-    - Sets up the data required for deploying the `GiniVesting` contract, including the total supply for vesting.
-
-    ```typescript
-    const totalSupplyForVesting = addDec(10_000); // The total supply for the all vestings
-    const giniVesting = await deployGiniVesting(totalSupplyForVesting);
-    ```
-
-5. **Deployment and Verification of `GiniToken`**
-
-    - Sets up the data required for deploying the `GiniToken` contract, including the token's name, symbol, total supply, and the addresses of the previously deployed `GiniTokenSale` and `GiniVesting` contracts.
-
-    ```typescript
-    const name = "Gini"; // The name of the token
-    const symbol = "GINI"; // The symbol of the token
-    const tokenTotalSupply = addDec(100_000_000); // The total supply of the token
-    const tokenSaleContract = giniTokenSale.target.toString(); // The address of the token sale contract
-    const tokenVestingContract = giniVesting.target.toString(); // The address of the token vesting contract
-
-    const gini = await deployGiniToken(name, symbol, tokenTotalSupply, tokenSaleContract, tokenVestingContract);
-    ```
-
-6. **Linking Contracts**
-
-    - Sets the `GiniToken` address on both the `GiniTokenSale` and `GiniVesting` contracts.
-
-    ```typescript
-    await giniTokenSale.setGiniToken(gini);
-    await giniVesting.setGiniToken(gini);
-    ```
-
-#### How to Run the Script
-
-To run the deployment script, use the following command in your terminal:
+To run this script, use the following command in your terminal:
 
 ```bash
-npx hardhat run scripts/deployment/deploy.ts --network <network-name>
+npx hardhat run scripts/deployment/separately/GiniTokenSale.ts --network mainnet
 ```
 
-Replace `<network-name>` with the name of the network you want to deploy to (e.g., `mainnet`, `sepolia`, etc.).
+### Documentation for [`GiniVesting.ts`](/scripts/deployment/separately/GiniVesting.ts)
 
-### How to Run and deploy contracts separately
+This TypeScript file is responsible for deploying the Gini vesting contract by utilizing the [`deployGiniVesting`](./scripts/deployment/separately/exported-functions/deployGiniVesting.ts) function and configuration settings from a JSON file.
 
-In the folder [`separately`](./scripts/deployment/separately/) there are 3 scripts for separately deployment
+❌Make sure you read block about settings and set the correct start timestamp properly❌
 
-They have same settings as for the combined deployment.
+#### Imports
 
-The order for the separately deployment:
+-   **deployGiniVesting**: A function imported from `./exported-functions/deployGiniVesting` that handles the deployment of the Gini vesting contract.
+-   **settings**: Configuration settings imported from `../../../settings.json`, which includes addresses for various contracts and other parameters.
 
-1. `Gini Token Sale` (after deployment save the address of the token sale contract).
-2. `Gini Vesting` (after deployment save the address of the token vesting contract).
-3. `Gini Token` (Set nearly deploy contracts required for the constructor).
+#### Main Function
 
-### Documentation for `initVesting.ts`
+The `main` function is an asynchronous function that performs the following steps:
 
-#### Overview
+1. **Retrieve Vesting Start Timestamp**:
 
-The [`initVesting.ts`](./scripts/initVesting.ts) script is used to initialize a vesting schedule for the [`GiniVesting`] contract. It sets up the vesting parameters, including the vesting ID, timestamps for the cliff, start, and end of the vesting period, and the beneficiaries along with their respective token amounts.
+    - `startTimestamp`: The timestamp when the vestings will start, retrieved from `settings.vestingStartTimestamp`.
 
-#### Detailed Steps
+2. **Deploy Gini Vesting**: Calls the `deployGiniVesting` function with the retrieved start timestamp as an argument.
 
-1. **Import Statements**
+#### Verification on the Etherscan
 
-    - The script imports necessary modules and functions, including the Hardhat runtime environment [`hre`] for decimal adjustments.
+The script will automatically verify smart contract on the etherscan, make sure you set the `ETHERSCAN_API_KEY` in `.env` file.
 
-    ```typescript
-    import hre from "hardhat";
-    import { addDec } from "../test/helpers";
-    ```
+#### Running the Script
 
-2. **Initialize ethers**
-
-    - The [`ethers`]object is initialized from the Hardhat runtime environment.
-
-    ```typescript
-    const ethers = hre.ethers;
-    ```
-
-3. **Addresses**
-
-    - The address of the [`GiniVesting`](./contracts/GiniVesting.sol) contract is defined. This should be replaced with the actual contract address.
-
-    ```typescript
-    const VESTING = "";
-    ```
-
-4. **Main Function: [`initVesting`](./scripts/initVesting.ts)**
-
-    - The [`initVesting`] function is defined to initialize the vesting schedule.
-
-    ```typescript
-    async function initVesting() {
-    ```
-
-5. **Get Signer**
-
-    - The script retrieves the signer (admin) from the list of available signers.
-
-    ```typescript
-    const [admin] = await ethers.getSigners();
-    ```
-
-6. **Get Vesting Contract**
-
-    - The script retrieves the [`GiniVesting`](./contracts/GiniVesting.sol)
-
-    ```typescript
-    const vesting = await ethers.getContractAt("GiniVesting", VESTING);
-    ```
-
-7. **Prepare Data for Vesting**
-
-    - The script prepares the data required for initializing the vesting schedule, including the vesting ID, cliff start timestamp, start timestamp, end timestamp, beneficiaries, and amounts.
-
-    ```typescript
-    const vestingID = 1; // ID of the vesting
-    const cliffStartTimestamp = 1725918160; // Cliff start timestamp of the vesting
-    const startTimestamp = 1725919160; // Start timestamp of the vesting
-    const endTimestamp = 1725928160; // End timestamp of the vesting
-    const beneficiaries = [admin.address];
-    const amounts = [addDec(250)];
-    ```
-
-    The script run the following function in the contract [`GiniVesting`](./contracts/GiniVesting.sol)
-
-    ```typescript
-    await vesting.initVesting(vestingID, cliffStartTimestamp, startTimestamp, endTimestamp, beneficiaries, amounts);
-    ```
-
-#### To run the script use following command
+To run this script, use the following command in your terminal:
 
 ```bash
-npx hardhat run scripts/initVesting.ts --network <network-name>
+npx hardhat run scripts/deployment/separately/GiniVesting.ts --network mainnet
+```
+
+### Documentation for [`GiniToken.ts`](/scripts/deployment/separately/GiniToken.ts)
+
+This TypeScript file is responsible for deploying the Gini token by utilizing the [`deployGiniToken`](./scripts/deployment/separately/exported-functions/deployGiniToken.ts) function and configuration settings from a JSON file.
+
+❌Make sure you read block about settings and set the addresses of the `GiniTokenSale` and `GiniVesting` contracts that you already deployed❌
+
+#### Imports
+
+-   **deployGiniToken**: A function imported from `./exported-functions/deployGiniToken` that handles the deployment of the Gini token.
+-   **settings**: Configuration settings imported from `../../../settings.json`, which includes addresses for various contracts.
+
+#### Main Function
+
+The `main` function is an asynchronous function that performs the following steps:
+
+1. **Retrieve Contract Addresses**:
+    - `tokenSaleContract`: The address of the token sale contract, retrieved from `settings.addresses.GiniTokenSale`.
+    - `tokenVestingContract`: The address of the token vesting contract, retrieved from `settings.addresses.GiniVesting`.
+2. **Deploy Gini Token**: Calls the `deployGiniToken`function with the retrieved contract addresses as arguments.
+
+#### Verification on the Etherscan
+
+The script will automatically verify smart contract on the etherscan, make sure you set the `ETHERSCAN_API_KEY` in `.env` file.
+
+#### Running the Script
+
+To run this script, use the following command in your terminal:
+
+```bash
+npx hardhat run scripts/deployment/separately/GiniToken.ts --network mainnet
 ```
